@@ -421,7 +421,7 @@ export class BossDuelScene extends Phaser.Scene {
 
     const charge = Math.min(1, Math.max(0, (time - this.bossAttack.startedAt) / (this.bossAttack.activeAt - this.bossAttack.startedAt)));
     const color = attackPhase === "active" ? 0xfff0b3 : attackPhase === "snap" ? 0xffd267 : 0xb53b35;
-    const alpha = attackPhase === "active" ? 0.46 : attackPhase === "snap" ? 0.36 : 0.1 + charge * 0.14;
+    const alpha = attackPhase === "active" ? DANGER_FRAME_FLASH[this.bossAttack.id].fillAlpha : attackPhase === "snap" ? 0.36 : 0.1 + charge * 0.14;
 
     this.telegraphs.fillStyle(color, alpha);
     if (move.arcDegrees >= 360) {
@@ -693,8 +693,10 @@ export class BossDuelScene extends Phaser.Scene {
       const fillAlpha = isPlayerHit ? alpha * 0.42 : alpha * 0.28;
       this.effects.fillStyle(effect.color, fillAlpha);
       this.effects.fillCircle(effect.position.x, effect.position.y, radius * 0.45);
-      if (isPlayerHit && progress < 0.3) {
-        const burstAlpha = (1 - progress / 0.3) * 0.6;
+      const BURST_PROGRESS_CUTOFF = 0.3;
+      const BURST_ALPHA = 0.6;
+      if (isPlayerHit && progress < BURST_PROGRESS_CUTOFF) {
+        const burstAlpha = (1 - progress / BURST_PROGRESS_CUTOFF) * BURST_ALPHA;
         this.effects.lineStyle(2, 0xffffff, burstAlpha);
         this.effects.strokeCircle(effect.position.x, effect.position.y, radius * 0.7);
       }
