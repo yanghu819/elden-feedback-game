@@ -31,6 +31,8 @@ function summarizeTrajectory(payload: FeedbackPayload) {
   for (let index = 1; index < trajectory.length; index += 1) {
     const previous = trajectory[index - 1];
     const current = trajectory[index];
+    const previousSkill = previous.skill ?? 0;
+    const currentSkill = current.skill ?? 0;
     if (current.damageTaken > previous.damageTaken) {
       damageEvents.push(
         `- ${current.t}ms: +${current.damageTaken - previous.damageTaken} damage during ${current.bossMove}/${current.bossAttackPhase}, player HP ${current.playerHp}`
@@ -42,15 +44,15 @@ function summarizeTrajectory(payload: FeedbackPayload) {
     if (current.dodges > previous.dodges) {
       dodgeEvents.push(`- ${current.t}ms: dodge during ${current.bossMove}/${current.bossAttackPhase}, stamina ${current.stamina}`);
     }
-    if (current.light > previous.light || current.heavy > previous.heavy) {
+    if (current.light > previous.light || current.heavy > previous.heavy || currentSkill > previousSkill) {
       attackEvents.push(
-        `- ${current.t}ms: attacks light=${current.light}, heavy=${current.heavy}, player state ${current.playerActionState}, stamina ${current.stamina}, boss ${current.bossMove}/${current.bossAttackPhase}`
+        `- ${current.t}ms: attacks light=${current.light}, heavy=${current.heavy}, skill=${currentSkill}, player state ${current.playerActionState}, stamina ${current.stamina}, boss ${current.bossMove}/${current.bossAttackPhase}`
       );
     }
   }
 
   const lastRows = trajectory.slice(-14).map((sample) =>
-    `| ${sample.t} | ${sample.status} | ${sample.playerHp} | ${sample.stamina} | ${sample.bossHp} | ${sample.bossMove} | ${sample.bossAttackPhase} | ${sample.playerActionState} | ${sample.dodges} | ${sample.hits} | ${sample.damageTaken} |`
+    `| ${sample.t} | ${sample.status} | ${sample.playerHp} | ${sample.stamina} | ${sample.bossHp} | ${sample.bossMove} | ${sample.bossAttackPhase} | ${sample.playerActionState} | ${sample.dodges} | ${sample.light} | ${sample.heavy} | ${sample.skill ?? 0} | ${sample.hits} | ${sample.damageTaken} |`
   );
 
   return [
@@ -69,13 +71,13 @@ function summarizeTrajectory(payload: FeedbackPayload) {
     "Attack events:",
     attackEvents.length ? attackEvents.join("\n") : "- None",
     "",
-    "| t(ms) | status | player HP | stamina | boss HP | boss move | boss phase | player state | dodges | hits | damage |",
-    "| --- | --- | ---: | ---: | ---: | --- | --- | --- | ---: | ---: | ---: |",
-    ...(lastRows.length ? lastRows : ["| n/a | n/a | 0 | 0 | 0 | n/a | idle | idle | 0 | 0 | 0 |"])
+    "| t(ms) | status | player HP | stamina | boss HP | boss move | boss phase | player state | dodges | light | heavy | skill | hits | damage |",
+    "| --- | --- | ---: | ---: | ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ...(lastRows.length ? lastRows : ["| n/a | n/a | 0 | 0 | 0 | n/a | idle | idle | 0 | 0 | 0 | 0 | 0 | 0 |"])
   ].join("\n");
 }
 
-function buildIssueBody(payload: FeedbackPayload) {
+export function buildFeedbackIssueBody(payload: FeedbackPayload) {
   const context = payload.context;
   return [
     "## User signal",
@@ -94,7 +96,7 @@ function buildIssueBody(payload: FeedbackPayload) {
     `- player_hp: ${Math.round(context.player.hp)} / ${context.player.maxHp}`,
     `- boss_hp: ${Math.round(context.boss.hp)} / ${context.boss.maxHp}`,
     `- dodge_count: ${context.metrics.dodgeCount}`,
-    `- attacks: light=${context.metrics.lightThrown}, heavy=${context.metrics.heavyThrown}, hits=${context.metrics.hitsLanded}`,
+    `- attacks: light=${context.metrics.lightThrown}, heavy=${context.metrics.heavyThrown}, skill=${context.metrics.skillThrown ?? 0}, hits=${context.metrics.hitsLanded}`,
     `- damage_taken: ${context.metrics.damageTaken}`,
     `- last_death_reason: ${context.metrics.lastDeathReason || "n/a"}`,
     `- fps: ${Math.round(context.metrics.fps)}`,
@@ -119,7 +121,7 @@ export async function createFeedbackIssue(payload: FeedbackPayload): Promise<Git
 
   const labels = DEFAULT_LABELS.map(cleanLabel);
   const title = `Feedback: ${redactText(payload.message).replace(/\s+/g, " ").slice(0, 72)}`;
-  const body = buildIssueBody(payload);
+  const body = buildFeedbackIssueBody(payload);
   const url = `https://api.github.com/repos/${owner}/${repo}/issues`;
 
   const create = (issueLabels?: string[]) =>

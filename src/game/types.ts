@@ -4,7 +4,7 @@ export type BossMoveId = "watching" | "delayed-lunge" | "grave-sweep" | "ash-sla
 
 export type BossAttackPhase = "idle" | "windup" | "snap" | "active" | "recovery";
 
-export type PlayerActionState = "idle" | "moving" | "dodging" | "light" | "heavy" | "recovering";
+export type PlayerActionState = "idle" | "moving" | "dodging" | "light" | "heavy" | "skill" | "recovering";
 
 export type Vec2 = {
   x: number;
@@ -37,6 +37,7 @@ export type CombatSnapshot = {
     dodgeCount: number;
     lightThrown: number;
     heavyThrown: number;
+    skillThrown: number;
     hitsLanded: number;
     damageTaken: number;
     lastDeathReason: string | null;
@@ -64,6 +65,7 @@ export type CombatTrajectorySample = {
   dodges: number;
   light: number;
   heavy: number;
+  skill: number;
   hits: number;
   damageTaken: number;
   deathReason: string | null;

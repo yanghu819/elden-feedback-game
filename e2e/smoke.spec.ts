@@ -8,6 +8,7 @@ test("loads playable arena and feedback modal", async ({ page }) => {
   await page.mouse.move(720, 360);
   await page.mouse.down();
   await page.mouse.up();
+  await page.keyboard.press("KeyE");
   await page.getByRole("button", { name: "Feedback" }).click();
   await expect(page.getByRole("dialog", { name: "Combat feedback" })).toBeVisible();
 });

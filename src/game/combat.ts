@@ -31,8 +31,42 @@ export const PLAYER_ATTACKS = {
     damage: 34,
     posture: 46,
     staminaCost: 34
+  },
+  skill: {
+    range: 132,
+    arcDegrees: 68,
+    damage: 22,
+    posture: 32,
+    staminaCost: 42
   }
 } as const;
+
+export type PlayerAttackKind = keyof typeof PLAYER_ATTACKS;
+
+export const PLAYER_ATTACK_TIMINGS: Record<
+  PlayerAttackKind,
+  {
+    activeDelayMs: number;
+    activeMs: number;
+    recoveryMs: number;
+  }
+> = {
+  light: {
+    activeDelayMs: 130,
+    activeMs: 100,
+    recoveryMs: 390
+  },
+  heavy: {
+    activeDelayMs: 250,
+    activeMs: 115,
+    recoveryMs: 640
+  },
+  skill: {
+    activeDelayMs: 170,
+    activeMs: 135,
+    recoveryMs: 520
+  }
+};
 
 export const BOSS_MAX: ActorVitals = {
   hp: 260,

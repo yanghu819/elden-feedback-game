@@ -64,7 +64,7 @@ button {
   inset: 0;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  padding: 20px;
+  padding: 16px;
 }
 
 .top-row,
@@ -76,38 +76,30 @@ button {
 }
 
 .stat-stack {
-  width: min(420px, 42vw);
-  min-width: 260px;
+  width: min(340px, 36vw);
+  min-width: 220px;
 }
 
 .boss-stack {
   text-align: right;
 }
 
-.name-row,
-.metric-row {
+.name-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 7px;
   color: #f4efe0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0;
   text-transform: uppercase;
 }
 
-.metric-row {
-  color: #c9c0a9;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: none;
-}
-
 .bar {
-  height: 10px;
-  margin-bottom: 7px;
+  height: 8px;
+  margin-bottom: 6px;
   overflow: hidden;
   border: 1px solid rgba(244, 239, 224, 0.18);
   border-radius: 4px;
@@ -166,18 +158,18 @@ button {
 .hint-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  max-width: 760px;
+  gap: 6px;
+  max-width: 560px;
   color: #d7d1bd;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .key {
-  min-height: 28px;
-  padding: 6px 8px;
-  border: 1px solid rgba(241, 239, 230, 0.16);
+  min-height: 24px;
+  padding: 5px 7px;
+  border: 1px solid rgba(241, 239, 230, 0.1);
   border-radius: 4px;
-  background: rgba(14, 16, 15, 0.78);
+  background: rgba(14, 16, 15, 0.5);
   white-space: nowrap;
 }
 

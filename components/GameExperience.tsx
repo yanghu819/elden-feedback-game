@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CombatSnapshot, CombatTrajectorySample, FeedbackPayload } from "@/src/game/types";
+import { appendTrajectorySample, toTrajectorySample } from "@/src/game/trajectory";
 
 const emptySnapshot: CombatSnapshot = {
   runId: "boot",
@@ -33,6 +34,7 @@ const emptySnapshot: CombatSnapshot = {
     dodgeCount: 0,
     lightThrown: 0,
     heavyThrown: 0,
+    skillThrown: 0,
     hitsLanded: 0,
     damageTaken: 0,
     lastDeathReason: null
@@ -41,52 +43,6 @@ const emptySnapshot: CombatSnapshot = {
 
 function percent(value: number, max: number) {
   return `${Math.max(0, Math.min(100, (value / max) * 100)).toFixed(1)}%`;
-}
-
-function formatSeconds(ms: number) {
-  return `${Math.floor(ms / 1000)}s`;
-}
-
-function toTrajectorySample(snapshot: CombatSnapshot): CombatTrajectorySample {
-  return {
-    runId: snapshot.runId,
-    t: Math.round(snapshot.elapsedMs),
-    status: snapshot.status,
-    bossAttackPhase: snapshot.bossAttackPhase,
-    playerActionState: snapshot.playerActionState,
-    playerHp: Math.round(snapshot.player.hp),
-    stamina: Math.round(snapshot.player.stamina),
-    bossHp: Math.round(snapshot.boss.hp),
-    bossPosture: Math.round(snapshot.boss.posture),
-    bossPhase: snapshot.boss.phase,
-    bossMove: snapshot.boss.move,
-    dodges: snapshot.metrics.dodgeCount,
-    light: snapshot.metrics.lightThrown,
-    heavy: snapshot.metrics.heavyThrown,
-    hits: snapshot.metrics.hitsLanded,
-    damageTaken: snapshot.metrics.damageTaken,
-    deathReason: snapshot.metrics.lastDeathReason,
-    fps: Math.round(snapshot.metrics.fps)
-  };
-}
-
-function shouldKeepTrajectorySample(previous: CombatTrajectorySample | undefined, next: CombatTrajectorySample) {
-  if (!previous) return true;
-  return (
-    previous.runId !== next.runId ||
-    next.t - previous.t >= 250 ||
-    previous.status !== next.status ||
-    previous.bossMove !== next.bossMove ||
-    previous.bossAttackPhase !== next.bossAttackPhase ||
-    previous.playerActionState !== next.playerActionState ||
-    previous.playerHp !== next.playerHp ||
-    previous.bossHp !== next.bossHp ||
-    previous.dodges !== next.dodges ||
-    previous.light !== next.light ||
-    previous.heavy !== next.heavy ||
-    previous.hits !== next.hits ||
-    previous.damageTaken !== next.damageTaken
-  );
 }
 
 export default function GameExperience() {
@@ -104,20 +60,13 @@ export default function GameExperience() {
     const onSnapshot = (event: Event) => {
       const detail = (event as CustomEvent<CombatSnapshot>).detail;
       const sample = toTrajectorySample(detail);
-      const previous = trajectoryRef.current.at(-1);
-      if (previous && previous.runId !== sample.runId) {
-        trajectoryRef.current = [];
-      }
-      if (shouldKeepTrajectorySample(previous, sample)) {
-        trajectoryRef.current = [...trajectoryRef.current, sample]
-          .filter((item) => item.runId === sample.runId && item.t >= sample.t - 12_000)
-          .slice(-80);
-      }
+      trajectoryRef.current = appendTrajectorySample(trajectoryRef.current, sample);
       setSnapshot(detail);
     };
+    const onFeedback = () => setFeedbackOpen(true);
 
     window.addEventListener("boss-duel:snapshot", onSnapshot);
-    window.addEventListener("boss-duel:feedback", () => setFeedbackOpen(true));
+    window.addEventListener("boss-duel:feedback", onFeedback);
 
     import("@/src/game/mountBossDuel").then(({ mountBossDuel }) => {
       if (mounted) {
@@ -128,6 +77,7 @@ export default function GameExperience() {
     return () => {
       mounted = false;
       window.removeEventListener("boss-duel:snapshot", onSnapshot);
+      window.removeEventListener("boss-duel:feedback", onFeedback);
       disposeGame?.();
     };
   }, []);
@@ -196,11 +146,6 @@ export default function GameExperience() {
             <div className="bar" aria-label="player stamina">
               <div className="bar-fill stamina" style={{ "--value": percent(snapshot.player.stamina, snapshot.player.maxStamina) } as React.CSSProperties} />
             </div>
-            <div className="metric-row">
-              <span>Dodges {snapshot.metrics.dodgeCount}</span>
-              <span>Hits {snapshot.metrics.hitsLanded}</span>
-              <span>FPS {Math.round(snapshot.metrics.fps)}</span>
-            </div>
           </div>
 
           <div className="stat-stack boss-stack">
@@ -213,10 +158,6 @@ export default function GameExperience() {
             </div>
             <div className="bar" aria-label="boss posture">
               <div className="bar-fill boss-posture" style={{ "--value": percent(snapshot.boss.posture, snapshot.boss.maxPosture) } as React.CSSProperties} />
-            </div>
-            <div className="metric-row">
-              <span>{snapshot.boss.move}</span>
-              <span>{formatSeconds(snapshot.elapsedMs)}</span>
             </div>
           </div>
         </div>
@@ -236,9 +177,8 @@ export default function GameExperience() {
             <span className="key">Mouse aim</span>
             <span className="key">LMB light</span>
             <span className="key">RMB heavy</span>
+            <span className="key">E cut</span>
             <span className="key">Space dodge</span>
-            <span className="key">R retry</span>
-            <span className="key">H hitboxes</span>
           </div>
           <button className="feedback-button" type="button" onClick={() => setFeedbackOpen(true)}>
             Feedback

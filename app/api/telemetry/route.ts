@@ -24,6 +24,7 @@ export async function POST(request: Request) {
     lastDeathReason: payload.metrics.lastDeathReason,
     dodgeCount: payload.metrics.dodgeCount,
     hitsLanded: payload.metrics.hitsLanded,
+    skillThrown: payload.metrics.skillThrown,
     damageTaken: payload.metrics.damageTaken
   });
 
