@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   BOSS_SNAP_WINDOW_MS,
   BOSS_MAX,
+  BOSS_MOVES,
+  DANGER_FRAME_FLASH,
+  HIT_CONFIRM,
   PLAYER_ATTACKS,
   PLAYER_ATTACK_TIMINGS,
   PLAYER_MAX,
@@ -119,6 +122,48 @@ describe("combat core", () => {
   it("uses a tighter phase two pattern near the player", () => {
     expect(chooseBossMove(140, 2, 2)).toBe("ash-slam");
     expect(chooseBossMove(140, 2, 3)).toBe("grave-sweep");
+  });
+
+  it("defines danger-frame flash config for every boss attack move", () => {
+    const attackMoves = Object.keys(BOSS_MOVES) as Array<keyof typeof BOSS_MOVES>;
+    for (const move of attackMoves) {
+      const flash = DANGER_FRAME_FLASH[move];
+      expect(flash.edgeColor).toBeGreaterThan(0);
+      expect(flash.edgeAlpha).toBeGreaterThan(0);
+      expect(flash.edgeAlpha).toBeLessThanOrEqual(1);
+      expect(flash.edgeWidth).toBeGreaterThanOrEqual(1);
+      expect(flash.fillAlpha).toBeGreaterThan(0);
+      expect(flash.fillAlpha).toBeLessThanOrEqual(1);
+      expect(flash.pulseSpeed).toBeGreaterThan(0);
+    }
+  });
+
+  it("gives delayed-lunge and grave-sweep distinct danger-frame colors", () => {
+    expect(DANGER_FRAME_FLASH["delayed-lunge"].edgeColor).not.toBe(DANGER_FRAME_FLASH["grave-sweep"].edgeColor);
+  });
+
+  it("makes danger-frame edges more prominent than the existing telegraph outline", () => {
+    for (const move of Object.keys(DANGER_FRAME_FLASH) as Array<keyof typeof DANGER_FRAME_FLASH>) {
+      expect(DANGER_FRAME_FLASH[move].edgeWidth).toBeGreaterThanOrEqual(7);
+      expect(DANGER_FRAME_FLASH[move].edgeAlpha).toBeGreaterThanOrEqual(0.85);
+    }
+  });
+
+  it("defines hit-confirm config for every player attack kind", () => {
+    const kinds = Object.keys(PLAYER_ATTACKS) as Array<keyof typeof PLAYER_ATTACKS>;
+    for (const kind of kinds) {
+      const confirm = HIT_CONFIRM[kind];
+      expect(confirm.shakeIntensity).toBeGreaterThan(0);
+      expect(confirm.shakeDurationMs).toBeGreaterThan(0);
+      expect(confirm.flashRadius).toBeGreaterThan(0);
+      expect(confirm.flashDurationMs).toBeGreaterThan(0);
+    }
+  });
+
+  it("scales hit-confirm intensity with attack weight", () => {
+    expect(HIT_CONFIRM.heavy.shakeIntensity).toBeGreaterThan(HIT_CONFIRM.light.shakeIntensity);
+    expect(HIT_CONFIRM.heavy.shakeDurationMs).toBeGreaterThan(HIT_CONFIRM.light.shakeDurationMs);
+    expect(HIT_CONFIRM.skill.shakeIntensity).toBeGreaterThan(HIT_CONFIRM.light.shakeIntensity);
   });
 
   it("keeps pre-death trajectory samples after terminal snapshots repeat", () => {
