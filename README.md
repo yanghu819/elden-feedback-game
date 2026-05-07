@@ -15,8 +15,8 @@ Open `http://localhost:3000`.
 
 - `WASD`: move
 - Mouse: aim
-- Left click: light attack
-- Right click: heavy attack
+- Left click or `J`: light attack
+- Right click or `K`: heavy attack
 - `E`: focus cut
 - `Space` or `Shift`: dodge
 - `R`: restart after death or victory

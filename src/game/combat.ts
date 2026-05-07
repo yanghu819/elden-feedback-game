@@ -16,6 +16,13 @@ export const PLAYER_MAX: ActorVitals = {
 };
 
 export const BOSS_SNAP_WINDOW_MS = 150;
+export const COUNTER_WINDOW_MS = 850;
+export const COUNTER_POSTURE_BONUS = 18;
+export const COUNTER_NEAR_MISS_RANGE_PADDING = 28;
+export const COUNTER_NEAR_MISS_ARC_PADDING_DEGREES = 10;
+export const COUNTER_STAMINA_REFUND = 18;
+export const COUNTER_STAGGER_MS = 920;
+export const BOSS_PRESSURE_PHASE_MS = 12_000;
 
 export const PLAYER_ATTACKS = {
   light: {
@@ -153,6 +160,36 @@ export function isInsideArc(origin: Vec2, facing: Vec2, target: Vec2, range: num
   const targetNorm = normalize(toTarget);
   const halfRadians = (arcDegrees * Math.PI) / 360;
   return dot(facingNorm, targetNorm) >= Math.cos(halfRadians);
+}
+
+export function isCounterDodgeCandidate(origin: Vec2, facing: Vec2, target: Vec2, range: number, arcDegrees: number) {
+  return isInsideArc(
+    origin,
+    facing,
+    target,
+    range + COUNTER_NEAR_MISS_RANGE_PADDING,
+    Math.min(360, arcDegrees + COUNTER_NEAR_MISS_ARC_PADDING_DEGREES)
+  );
+}
+
+export function getCounterPosture(basePosture: number, counterReady: boolean) {
+  return counterReady ? basePosture + COUNTER_POSTURE_BONUS : basePosture;
+}
+
+export function applyCounterStaminaRefund(vitals: ActorVitals, counterReady: boolean) {
+  if (!counterReady) return 0;
+  const before = vitals.stamina;
+  vitals.stamina = clamp(vitals.stamina + COUNTER_STAMINA_REFUND, 0, vitals.maxStamina);
+  return vitals.stamina - before;
+}
+
+export function isCounterWindowReady(counterUntil: number, time: number) {
+  return time <= counterUntil;
+}
+
+export function getBossPhase(hp: number, maxHp: number, elapsedMs: number, counterHits: number): 1 | 2 {
+  if (hp <= maxHp * 0.5 || elapsedMs >= BOSS_PRESSURE_PHASE_MS || counterHits > 0) return 2;
+  return 1;
 }
 
 export function getBossAttackPhase(

@@ -2,13 +2,22 @@ import { describe, expect, it } from "vitest";
 import {
   BOSS_SNAP_WINDOW_MS,
   BOSS_MAX,
+  BOSS_PRESSURE_PHASE_MS,
+  COUNTER_POSTURE_BONUS,
+  COUNTER_STAMINA_REFUND,
+  COUNTER_WINDOW_MS,
   PLAYER_ATTACKS,
   PLAYER_ATTACK_TIMINGS,
   PLAYER_MAX,
   applyDamage,
+  applyCounterStaminaRefund,
   chooseBossMove,
+  getBossPhase,
+  getCounterPosture,
   getBossAttackPhase,
   isInsideArc,
+  isCounterDodgeCandidate,
+  isCounterWindowReady,
   regenerateStamina,
   resetPosture,
   spendStamina
@@ -35,6 +44,9 @@ function sample(overrides: Partial<CombatTrajectorySample>): CombatTrajectorySam
     skill: 0,
     hits: 0,
     damageTaken: 0,
+    counterWindows: 0,
+    counterHits: 0,
+    counterReady: false,
     deathReason: null,
     fps: 60,
     ...overrides
@@ -101,6 +113,49 @@ describe("combat core", () => {
     expect(getBossAttackPhase(timing, 1911)).toBe("recovery");
     expect(getBossAttackPhase(timing, 2430)).toBe("recovery");
     expect(getBossAttackPhase(timing, 2431)).toBe("idle");
+  });
+
+  it("detects exact and narrow near-miss counter dodge candidates", () => {
+    const origin = { x: 100, y: 100 };
+    const facing = { x: 1, y: 0 };
+
+    expect(isCounterDodgeCandidate(origin, facing, { x: 170, y: 100 }, 90, 90)).toBe(true);
+    expect(isCounterDodgeCandidate(origin, facing, { x: 159, y: 168 }, 90, 90)).toBe(true);
+    expect(isCounterDodgeCandidate(origin, facing, { x: 240, y: 100 }, 90, 90)).toBe(false);
+    expect(isCounterDodgeCandidate(origin, facing, { x: 100, y: 218 }, 90, 90)).toBe(false);
+  });
+
+  it("expires counter windows at the configured timing boundary", () => {
+    expect(isCounterWindowReady(1000 + COUNTER_WINDOW_MS, 1000 + COUNTER_WINDOW_MS)).toBe(true);
+    expect(isCounterWindowReady(1000 + COUNTER_WINDOW_MS, 1000 + COUNTER_WINDOW_MS + 1)).toBe(false);
+  });
+
+  it("adds counter posture without changing hp damage math", () => {
+    const boss = { ...BOSS_MAX };
+    const posture = getCounterPosture(PLAYER_ATTACKS.light.posture, true);
+
+    applyDamage(boss, PLAYER_ATTACKS.light.damage, posture);
+
+    expect(posture).toBe(PLAYER_ATTACKS.light.posture + COUNTER_POSTURE_BONUS);
+    expect(boss.hp).toBe(BOSS_MAX.hp - PLAYER_ATTACKS.light.damage);
+    expect(getCounterPosture(PLAYER_ATTACKS.light.posture, false)).toBe(PLAYER_ATTACKS.light.posture);
+  });
+
+  it("refunds stamina on counter without exceeding max stamina", () => {
+    const player = { ...PLAYER_MAX, stamina: 70 };
+    expect(applyCounterStaminaRefund(player, true)).toBe(COUNTER_STAMINA_REFUND);
+    expect(player.stamina).toBe(88);
+    expect(applyCounterStaminaRefund(player, false)).toBe(0);
+    expect(player.stamina).toBe(88);
+    expect(applyCounterStaminaRefund(player, true)).toBe(12);
+    expect(player.stamina).toBe(100);
+  });
+
+  it("moves the boss into pressure phase after time or counter success", () => {
+    expect(getBossPhase(BOSS_MAX.hp, BOSS_MAX.maxHp, BOSS_PRESSURE_PHASE_MS - 1, 0)).toBe(1);
+    expect(getBossPhase(BOSS_MAX.hp, BOSS_MAX.maxHp, BOSS_PRESSURE_PHASE_MS, 0)).toBe(2);
+    expect(getBossPhase(BOSS_MAX.hp, BOSS_MAX.maxHp, 1000, 1)).toBe(2);
+    expect(getBossPhase(BOSS_MAX.maxHp * 0.5, BOSS_MAX.maxHp, 1000, 0)).toBe(2);
   });
 
   it("applies damage and posture break reset", () => {

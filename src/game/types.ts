@@ -40,6 +40,9 @@ export type CombatSnapshot = {
     skillThrown: number;
     hitsLanded: number;
     damageTaken: number;
+    counterWindows: number;
+    counterHits: number;
+    counterReady: boolean;
     lastDeathReason: string | null;
   };
 };
@@ -68,6 +71,9 @@ export type CombatTrajectorySample = {
   skill: number;
   hits: number;
   damageTaken: number;
+  counterWindows: number;
+  counterHits: number;
+  counterReady: boolean;
   deathReason: string | null;
   fps: number;
 };

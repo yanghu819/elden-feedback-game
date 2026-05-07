@@ -3,16 +3,23 @@ import {
   ARENA,
   BOSS_MAX,
   BOSS_MOVES,
+  COUNTER_STAGGER_MS,
+  COUNTER_WINDOW_MS,
   PLAYER_ATTACKS,
   PLAYER_ATTACK_TIMINGS,
   PLAYER_MAX,
   applyDamage,
+  applyCounterStaminaRefund,
   chooseBossMove,
   clampToArena,
   directionTo,
   distance,
+  getBossPhase,
+  getCounterPosture,
   getBossAttackPhase,
+  isCounterDodgeCandidate,
   isInsideArc,
+  isCounterWindowReady,
   makeRunId,
   normalize,
   regenerateStamina,
@@ -47,7 +54,7 @@ type ImpactFx = {
   durationMs: number;
   color: number;
   radius: number;
-  label: "player-hit" | "skill-hit" | "player-damaged" | "posture-break";
+  label: "player-hit" | "skill-hit" | "counter-hit" | "player-damaged" | "posture-break";
 };
 
 type Fighter = {
@@ -63,6 +70,8 @@ type RunStats = {
   skillThrown: number;
   hitsLanded: number;
   damageTaken: number;
+  counterWindows: number;
+  counterHits: number;
   lastDeathReason: string | null;
   bossMoveUses: Record<string, number>;
   bossMoveHits: Record<string, number>;
@@ -93,6 +102,11 @@ export class BossDuelScene extends Phaser.Scene {
   private telemetrySent = false;
   private impactFx: ImpactFx[] = [];
   private hitStopUntil = 0;
+  private counterUntil = 0;
+  private counterAwardedForAttack: BossAttack | null = null;
+  private counterFlashUntil = 0;
+  private lastBossPhase: 1 | 2 = 1;
+  private phaseSurgeUntil = 0;
 
   constructor() {
     super("BossDuelScene");
@@ -103,7 +117,7 @@ export class BossDuelScene extends Phaser.Scene {
     this.telegraphs = this.add.graphics();
     this.actors = this.add.graphics();
     this.effects = this.add.graphics();
-    this.keys = this.input.keyboard!.addKeys("W,A,S,D,SPACE,SHIFT,R,H,F,E") as Record<string, Phaser.Input.Keyboard.Key>;
+    this.keys = this.input.keyboard!.addKeys("W,A,S,D,SPACE,SHIFT,R,H,F,E,J,K") as Record<string, Phaser.Input.Keyboard.Key>;
     this.input.mouse?.disableContextMenu();
     this.restartRun();
   }
@@ -139,6 +153,7 @@ export class BossDuelScene extends Phaser.Scene {
 
     this.updatePlayer(time, dt);
     this.updateBoss(time, dt);
+    this.updateCounterWindow(time);
     this.resolvePlayerAttack(time);
     this.resolveBossAttack(time);
     this.checkEndState(time);
@@ -169,6 +184,11 @@ export class BossDuelScene extends Phaser.Scene {
     this.telemetrySent = false;
     this.impactFx = [];
     this.hitStopUntil = 0;
+    this.counterUntil = 0;
+    this.counterAwardedForAttack = null;
+    this.counterFlashUntil = 0;
+    this.lastBossPhase = 1;
+    this.phaseSurgeUntil = 0;
     this.stats = {
       dodgeCount: 0,
       lightThrown: 0,
@@ -176,6 +196,8 @@ export class BossDuelScene extends Phaser.Scene {
       skillThrown: 0,
       hitsLanded: 0,
       damageTaken: 0,
+      counterWindows: 0,
+      counterHits: 0,
       lastDeathReason: null,
       bossMoveUses: {},
       bossMoveHits: {}
@@ -221,9 +243,9 @@ export class BossDuelScene extends Phaser.Scene {
     if (!attacking && !dodging) {
       if (Phaser.Input.Keyboard.JustDown(this.keys.E)) {
         this.startPlayerAttack("skill", time);
-      } else if (pointer.leftButtonDown()) {
+      } else if (Phaser.Input.Keyboard.JustDown(this.keys.J) || pointer.leftButtonDown()) {
         this.startPlayerAttack("light", time);
-      } else if (pointer.rightButtonDown()) {
+      } else if (Phaser.Input.Keyboard.JustDown(this.keys.K) || pointer.rightButtonDown()) {
         this.startPlayerAttack("heavy", time);
       }
     }
@@ -231,7 +253,11 @@ export class BossDuelScene extends Phaser.Scene {
 
   private updateBoss(time: number, dt: number) {
     this.boss.facing = directionTo(this.boss.position, this.player.position);
-    const phase: 1 | 2 = this.boss.vitals.hp <= this.boss.vitals.maxHp * 0.5 ? 2 : 1;
+    const phase = this.getCurrentBossPhase(time);
+    if (phase !== this.lastBossPhase) {
+      this.lastBossPhase = phase;
+      this.phaseSurgeUntil = time + 900;
+    }
     const speed = phase === 2 ? 84 : 66;
 
     if (!this.bossAttack && time >= this.nextBossDecisionAt) {
@@ -296,6 +322,7 @@ export class BossDuelScene extends Phaser.Scene {
   private startBossAttack(id: Exclude<BossMoveId, "watching" | "broken">, time: number) {
     const move = BOSS_MOVES[id];
     this.stats.bossMoveUses[id] = (this.stats.bossMoveUses[id] || 0) + 1;
+    this.counterAwardedForAttack = null;
     this.bossAttack = {
       id,
       startedAt: time,
@@ -312,6 +339,8 @@ export class BossDuelScene extends Phaser.Scene {
     if (!this.playerAttack) return;
     if (time >= this.playerAttack.activeAt && time <= this.playerAttack.endsAt && !this.playerAttack.resolved) {
       const attack = PLAYER_ATTACKS[this.playerAttack.kind];
+      const counterReady = this.isCounterReady(time);
+      const posture = getCounterPosture(attack.posture, counterReady);
       const hit = isInsideArc(
         this.player.position,
         this.player.facing,
@@ -322,12 +351,21 @@ export class BossDuelScene extends Phaser.Scene {
       this.playerAttack.resolved = true;
       if (hit) {
         this.stats.hitsLanded += 1;
-        applyDamage(this.boss.vitals, attack.damage, attack.posture);
+        applyDamage(this.boss.vitals, attack.damage, posture);
         const hitLabel =
-          this.playerAttack.kind === "heavy" ? "posture-break" : this.playerAttack.kind === "skill" ? "skill-hit" : "player-hit";
-        const stopMs = this.playerAttack.kind === "heavy" ? 90 : this.playerAttack.kind === "skill" ? 76 : 58;
+          counterReady ? "counter-hit" : this.playerAttack.kind === "heavy" ? "posture-break" : this.playerAttack.kind === "skill" ? "skill-hit" : "player-hit";
+        const stopMs = counterReady ? 104 : this.playerAttack.kind === "heavy" ? 90 : this.playerAttack.kind === "skill" ? 76 : 58;
         this.addImpactFx(this.boss.position, time, hitLabel);
         this.hitStopUntil = Math.max(this.hitStopUntil, time + stopMs);
+        if (counterReady) {
+          this.stats.counterHits += 1;
+          applyCounterStaminaRefund(this.player.vitals, counterReady);
+          this.counterUntil = 0;
+          this.counterFlashUntil = time + 320;
+          this.bossAttack = null;
+          this.nextBossDecisionAt = time + COUNTER_STAGGER_MS;
+          this.phaseSurgeUntil = Math.max(this.phaseSurgeUntil, time + 520);
+        }
         if (this.boss.vitals.posture >= this.boss.vitals.maxPosture) {
           applyDamage(this.boss.vitals, 42, 0);
           resetPosture(this.boss.vitals);
@@ -359,6 +397,26 @@ export class BossDuelScene extends Phaser.Scene {
       this.addImpactFx(this.player.position, time, "player-damaged");
       this.hitStopUntil = Math.max(this.hitStopUntil, time + 46);
     }
+  }
+
+  private updateCounterWindow(time: number) {
+    if (!this.bossAttack || this.counterAwardedForAttack === this.bossAttack || time >= this.dodgeEndsAt) return;
+    if (getBossAttackPhase(this.bossAttack, time) !== "active") return;
+
+    const move = BOSS_MOVES[this.bossAttack.id];
+    const counterCandidate = isCounterDodgeCandidate(
+      this.boss.position,
+      this.bossAttack.facing,
+      this.player.position,
+      move.range,
+      move.arcDegrees
+    );
+    if (!counterCandidate) return;
+
+    this.counterAwardedForAttack = this.bossAttack;
+    this.counterUntil = time + COUNTER_WINDOW_MS;
+    this.counterFlashUntil = time + 260;
+    this.stats.counterWindows += 1;
   }
 
   private checkEndState(time: number) {
@@ -466,6 +524,7 @@ export class BossDuelScene extends Phaser.Scene {
       this.player.position.x + this.player.facing.x * 31,
       this.player.position.y + this.player.facing.y * 31
     );
+    this.drawCounterReadiness(time);
 
     if (this.playerAttack) {
       const attack = PLAYER_ATTACKS[this.playerAttack.kind];
@@ -491,7 +550,7 @@ export class BossDuelScene extends Phaser.Scene {
 
     this.drawImpactFx(time);
 
-    const phaseTwo = this.boss.vitals.hp <= this.boss.vitals.maxHp * 0.5;
+    const phaseTwo = this.getCurrentBossPhase(time) === 2;
     const bossAttackPhase = getBossAttackPhase(this.bossAttack, time);
     const bossHitFlash = this.hasRecentBossHitFx(time);
     const bossColor = bossHitFlash ? 0xf5d889 : bossAttackPhase === "recovery" ? 0x2c312d : phaseTwo ? 0x6d2631 : 0x443d39;
@@ -504,6 +563,11 @@ export class BossDuelScene extends Phaser.Scene {
     if (bossHitFlash) {
       this.actors.lineStyle(4, 0xf5d889, 0.84);
       this.actors.strokeCircle(this.boss.position.x, this.boss.position.y, 42);
+    }
+    if (time < this.phaseSurgeUntil) {
+      const progress = 1 - Math.max(0, this.phaseSurgeUntil - time) / 900;
+      this.actors.lineStyle(4, 0xffd267, 0.5 * (1 - progress));
+      this.actors.strokeCircle(this.boss.position.x, this.boss.position.y, 52 + progress * 34);
     }
     this.actors.fillStyle(0xd8b25e, 0.95);
     this.actors.fillCircle(
@@ -640,10 +704,26 @@ export class BossDuelScene extends Phaser.Scene {
     this.actors.strokeCircle(center.x, center.y, 27 * pulse);
   }
 
+  private drawCounterReadiness(time: number) {
+    const counterReady = this.isCounterReady(time);
+    const flashing = time < this.counterFlashUntil;
+    if (!counterReady && !flashing) return;
+
+    const remaining = counterReady ? Math.max(0, this.counterUntil - time) / COUNTER_WINDOW_MS : 0;
+    const pulse = 1 + Math.sin(time / 32) * 0.05;
+    const radius = (counterReady ? 28 + remaining * 8 : 38) * pulse;
+    const alpha = counterReady ? 0.28 + remaining * 0.32 : 0.26;
+    this.effects.lineStyle(3, 0x8bd8d2, alpha);
+    this.effects.strokeCircle(this.player.position.x, this.player.position.y, radius);
+    this.effects.lineStyle(1, 0xffffff, alpha * 0.72);
+    this.effects.strokeCircle(this.player.position.x, this.player.position.y, radius + 7);
+  }
+
   private addImpactFx(position: Vec2, time: number, label: ImpactFx["label"]) {
     const config = {
       "player-hit": { color: 0xf5d889, radius: 34, durationMs: 240 },
       "skill-hit": { color: 0x8bd8d2, radius: 44, durationMs: 280 },
+      "counter-hit": { color: 0x8bd8d2, radius: 54, durationMs: 360 },
       "player-damaged": { color: 0xff6c55, radius: 42, durationMs: 300 },
       "posture-break": { color: 0xffffff, radius: 58, durationMs: 340 }
     }[label];
@@ -673,7 +753,7 @@ export class BossDuelScene extends Phaser.Scene {
   private hasRecentBossHitFx(time: number) {
     return this.impactFx.some(
       (effect) =>
-        (effect.label === "player-hit" || effect.label === "skill-hit" || effect.label === "posture-break") &&
+        (effect.label === "player-hit" || effect.label === "skill-hit" || effect.label === "counter-hit" || effect.label === "posture-break") &&
         time - effect.startedAt >= 0 &&
         time - effect.startedAt <= Math.min(160, effect.durationMs)
     );
@@ -710,7 +790,7 @@ export class BossDuelScene extends Phaser.Scene {
         maxStamina: 0,
         posture: this.boss.vitals.posture,
         maxPosture: this.boss.vitals.maxPosture,
-        phase: this.boss.vitals.hp <= this.boss.vitals.maxHp * 0.5 ? 2 : 1,
+        phase: this.getCurrentBossPhase(time),
         move: this.bossAttack?.id || "watching"
       },
       metrics: {
@@ -721,6 +801,9 @@ export class BossDuelScene extends Phaser.Scene {
         skillThrown: this.stats.skillThrown,
         hitsLanded: this.stats.hitsLanded,
         damageTaken: this.stats.damageTaken,
+        counterWindows: this.stats.counterWindows,
+        counterHits: this.stats.counterHits,
+        counterReady: this.isCounterReady(time),
         lastDeathReason: this.stats.lastDeathReason
       }
     };
@@ -767,6 +850,19 @@ export class BossDuelScene extends Phaser.Scene {
       return "moving";
     }
     return "idle";
+  }
+
+  private isCounterReady(time: number) {
+    return this.counterUntil > 0 && isCounterWindowReady(this.counterUntil, time);
+  }
+
+  private getCurrentBossPhase(time: number): 1 | 2 {
+    return getBossPhase(
+      this.boss.vitals.hp,
+      this.boss.vitals.maxHp,
+      Math.max(0, time - this.runStartedAt),
+      this.stats?.counterHits || 0
+    );
   }
 
   private scalePointer(pointer: Phaser.Input.Pointer): Vec2 {

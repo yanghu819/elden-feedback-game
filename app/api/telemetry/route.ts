@@ -25,6 +25,9 @@ export async function POST(request: Request) {
     dodgeCount: payload.metrics.dodgeCount,
     hitsLanded: payload.metrics.hitsLanded,
     skillThrown: payload.metrics.skillThrown,
+    counterWindows: payload.metrics.counterWindows,
+    counterHits: payload.metrics.counterHits,
+    counterReady: payload.metrics.counterReady,
     damageTaken: payload.metrics.damageTaken
   });
 

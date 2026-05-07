@@ -25,6 +25,9 @@ export function toTrajectorySample(snapshot: CombatSnapshot): CombatTrajectorySa
     skill: snapshot.metrics.skillThrown,
     hits: snapshot.metrics.hitsLanded,
     damageTaken: snapshot.metrics.damageTaken,
+    counterWindows: snapshot.metrics.counterWindows,
+    counterHits: snapshot.metrics.counterHits,
+    counterReady: snapshot.metrics.counterReady,
     deathReason: snapshot.metrics.lastDeathReason,
     fps: Math.round(snapshot.metrics.fps)
   };
@@ -46,7 +49,10 @@ export function shouldKeepTrajectorySample(previous: CombatTrajectorySample | un
     previous.heavy !== next.heavy ||
     previous.skill !== next.skill ||
     previous.hits !== next.hits ||
-    previous.damageTaken !== next.damageTaken
+    previous.damageTaken !== next.damageTaken ||
+    previous.counterWindows !== next.counterWindows ||
+    previous.counterHits !== next.counterHits ||
+    previous.counterReady !== next.counterReady
   );
 }
 

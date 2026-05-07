@@ -39,6 +39,9 @@ const payload: FeedbackPayload = {
       skillThrown: 1,
       hitsLanded: 1,
       damageTaken: 22,
+      counterWindows: 1,
+      counterHits: 1,
+      counterReady: false,
       lastDeathReason: "grave-sweep"
     }
   },
@@ -61,6 +64,9 @@ const payload: FeedbackPayload = {
       skill: 0,
       hits: 1,
       damageTaken: 0,
+      counterWindows: 0,
+      counterHits: 0,
+      counterReady: false,
       deathReason: null,
       fps: 60
     },
@@ -82,6 +88,9 @@ const payload: FeedbackPayload = {
       skill: 1,
       hits: 1,
       damageTaken: 0,
+      counterWindows: 0,
+      counterHits: 0,
+      counterReady: false,
       deathReason: null,
       fps: 60
     },
@@ -103,6 +112,9 @@ const payload: FeedbackPayload = {
       skill: 1,
       hits: 1,
       damageTaken: 0,
+      counterWindows: 1,
+      counterHits: 0,
+      counterReady: true,
       deathReason: null,
       fps: 60
     },
@@ -124,6 +136,9 @@ const payload: FeedbackPayload = {
       skill: 1,
       hits: 1,
       damageTaken: 22,
+      counterWindows: 1,
+      counterHits: 1,
+      counterReady: false,
       deathReason: "grave-sweep",
       fps: 60
     }
@@ -137,9 +152,12 @@ describe("feedback issue body", () => {
     expect(body).toContain("- boss_attack_phase: active");
     expect(body).toContain("- player_action_state: idle");
     expect(body).toContain("- attacks: light=1, heavy=0, skill=1, hits=1");
+    expect(body).toContain("- counters: windows=1, hits=1, ready=no");
     expect(body).toContain("damage during grave-sweep/active");
     expect(body).toContain("dodge during grave-sweep/active");
     expect(body).toContain("skill=1, player state skill");
-    expect(body).toContain("| t(ms) | status | player HP | stamina | boss HP | boss move | boss phase | player state | dodges | light | heavy | skill | hits | damage |");
+    expect(body).toContain("counter window armed during grave-sweep/active");
+    expect(body).toContain("counter hit landed");
+    expect(body).toContain("| t(ms) | status | player HP | stamina | boss HP | boss move | boss phase | player state | dodges | light | heavy | skill | hits | damage | counter ready | counter windows | counter hits |");
   });
 });

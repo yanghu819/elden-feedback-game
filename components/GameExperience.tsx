@@ -37,6 +37,9 @@ const emptySnapshot: CombatSnapshot = {
     skillThrown: 0,
     hitsLanded: 0,
     damageTaken: 0,
+    counterWindows: 0,
+    counterHits: 0,
+    counterReady: false,
     lastDeathReason: null
   }
 };
@@ -175,8 +178,8 @@ export default function GameExperience() {
           <div className="hint-row">
             <span className="key">WASD move</span>
             <span className="key">Mouse aim</span>
-            <span className="key">LMB light</span>
-            <span className="key">RMB heavy</span>
+            <span className="key">LMB/J light</span>
+            <span className="key">RMB/K heavy</span>
             <span className="key">E cut</span>
             <span className="key">Space dodge</span>
           </div>
