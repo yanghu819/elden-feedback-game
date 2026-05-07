@@ -43,9 +43,29 @@ export type CombatRunSummary = CombatSnapshot & {
   bossMoveHits: Record<string, number>;
 };
 
+export type CombatTrajectorySample = {
+  runId: string;
+  t: number;
+  status: GameStatus;
+  playerHp: number;
+  stamina: number;
+  bossHp: number;
+  bossPosture: number;
+  bossPhase: 1 | 2;
+  bossMove: BossMoveId;
+  dodges: number;
+  light: number;
+  heavy: number;
+  hits: number;
+  damageTaken: number;
+  deathReason: string | null;
+  fps: number;
+};
+
 export type FeedbackPayload = {
   message: string;
   context: CombatSnapshot;
+  trajectory?: CombatTrajectorySample[];
   route: string;
   createdAt: string;
 };

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import type { CombatSnapshot, FeedbackPayload } from "@/src/game/types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { CombatSnapshot, CombatTrajectorySample, FeedbackPayload } from "@/src/game/types";
 
 const emptySnapshot: CombatSnapshot = {
   runId: "boot",
@@ -45,12 +45,51 @@ function formatSeconds(ms: number) {
   return `${Math.floor(ms / 1000)}s`;
 }
 
+function toTrajectorySample(snapshot: CombatSnapshot): CombatTrajectorySample {
+  return {
+    runId: snapshot.runId,
+    t: Math.round(snapshot.elapsedMs),
+    status: snapshot.status,
+    playerHp: Math.round(snapshot.player.hp),
+    stamina: Math.round(snapshot.player.stamina),
+    bossHp: Math.round(snapshot.boss.hp),
+    bossPosture: Math.round(snapshot.boss.posture),
+    bossPhase: snapshot.boss.phase,
+    bossMove: snapshot.boss.move,
+    dodges: snapshot.metrics.dodgeCount,
+    light: snapshot.metrics.lightThrown,
+    heavy: snapshot.metrics.heavyThrown,
+    hits: snapshot.metrics.hitsLanded,
+    damageTaken: snapshot.metrics.damageTaken,
+    deathReason: snapshot.metrics.lastDeathReason,
+    fps: Math.round(snapshot.metrics.fps)
+  };
+}
+
+function shouldKeepTrajectorySample(previous: CombatTrajectorySample | undefined, next: CombatTrajectorySample) {
+  if (!previous) return true;
+  return (
+    previous.runId !== next.runId ||
+    next.t - previous.t >= 250 ||
+    previous.status !== next.status ||
+    previous.bossMove !== next.bossMove ||
+    previous.playerHp !== next.playerHp ||
+    previous.bossHp !== next.bossHp ||
+    previous.dodges !== next.dodges ||
+    previous.light !== next.light ||
+    previous.heavy !== next.heavy ||
+    previous.hits !== next.hits ||
+    previous.damageTaken !== next.damageTaken
+  );
+}
+
 export default function GameExperience() {
   const [snapshot, setSnapshot] = useState<CombatSnapshot>(emptySnapshot);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const trajectoryRef = useRef<CombatTrajectorySample[]>([]);
 
   useEffect(() => {
     let disposeGame: (() => void) | undefined;
@@ -58,6 +97,16 @@ export default function GameExperience() {
 
     const onSnapshot = (event: Event) => {
       const detail = (event as CustomEvent<CombatSnapshot>).detail;
+      const sample = toTrajectorySample(detail);
+      const previous = trajectoryRef.current.at(-1);
+      if (previous && previous.runId !== sample.runId) {
+        trajectoryRef.current = [];
+      }
+      if (shouldKeepTrajectorySample(previous, sample)) {
+        trajectoryRef.current = [...trajectoryRef.current, sample]
+          .filter((item) => item.runId === sample.runId && item.t >= sample.t - 12_000)
+          .slice(-80);
+      }
       setSnapshot(detail);
     };
 
@@ -98,6 +147,7 @@ export default function GameExperience() {
     const payload: FeedbackPayload = {
       message: trimmed,
       context: snapshot,
+      trajectory: trajectoryRef.current.slice(-80),
       route: "/",
       createdAt: new Date().toISOString()
     };
@@ -206,7 +256,7 @@ export default function GameExperience() {
               placeholder="What felt unfair, boring, confusing, or satisfying?"
             />
             <p className="modal-note">
-              Sends your text plus anonymous combat metrics: version, run time, death reason, boss move stats, FPS, and damage summary.
+              Sends your text plus anonymous combat metrics: version, recent trajectory, death reason, boss move stats, FPS, and damage summary.
             </p>
             <div className="modal-actions">
               <button className="secondary-button" type="button" onClick={() => setFeedbackOpen(false)}>

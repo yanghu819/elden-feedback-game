@@ -15,6 +15,56 @@ function getRepoConfig() {
   return { token, owner, repo };
 }
 
+function summarizeTrajectory(payload: FeedbackPayload) {
+  const trajectory = payload.trajectory || [];
+  const damageEvents = [];
+  const hitEvents = [];
+  const dodgeEvents = [];
+  const attackEvents = [];
+
+  for (let index = 1; index < trajectory.length; index += 1) {
+    const previous = trajectory[index - 1];
+    const current = trajectory[index];
+    if (current.damageTaken > previous.damageTaken) {
+      damageEvents.push(`- ${current.t}ms: +${current.damageTaken - previous.damageTaken} damage during ${current.bossMove}, player HP ${current.playerHp}`);
+    }
+    if (current.hits > previous.hits) {
+      hitEvents.push(`- ${current.t}ms: hit landed, boss HP ${current.bossHp}, posture ${current.bossPosture}`);
+    }
+    if (current.dodges > previous.dodges) {
+      dodgeEvents.push(`- ${current.t}ms: dodge during ${current.bossMove}, stamina ${current.stamina}`);
+    }
+    if (current.light > previous.light || current.heavy > previous.heavy) {
+      attackEvents.push(`- ${current.t}ms: attacks light=${current.light}, heavy=${current.heavy}, stamina ${current.stamina}, boss move ${current.bossMove}`);
+    }
+  }
+
+  const lastRows = trajectory.slice(-14).map((sample) =>
+    `| ${sample.t} | ${sample.status} | ${sample.playerHp} | ${sample.stamina} | ${sample.bossHp} | ${sample.bossMove} | ${sample.dodges} | ${sample.hits} | ${sample.damageTaken} |`
+  );
+
+  return [
+    "## Recent trajectory",
+    trajectory.length ? `Samples: ${trajectory.length}` : "No trajectory samples included.",
+    "",
+    "Damage events:",
+    damageEvents.length ? damageEvents.join("\n") : "- None",
+    "",
+    "Hit events:",
+    hitEvents.length ? hitEvents.join("\n") : "- None",
+    "",
+    "Dodge events:",
+    dodgeEvents.length ? dodgeEvents.join("\n") : "- None",
+    "",
+    "Attack events:",
+    attackEvents.length ? attackEvents.join("\n") : "- None",
+    "",
+    "| t(ms) | status | player HP | stamina | boss HP | boss move | dodges | hits | damage |",
+    "| --- | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: |",
+    ...(lastRows.length ? lastRows : ["| n/a | n/a | 0 | 0 | 0 | n/a | 0 | 0 | 0 |"])
+  ].join("\n");
+}
+
 function buildIssueBody(payload: FeedbackPayload) {
   const context = payload.context;
   return [
@@ -37,8 +87,11 @@ function buildIssueBody(payload: FeedbackPayload) {
     `- last_death_reason: ${context.metrics.lastDeathReason || "n/a"}`,
     `- fps: ${Math.round(context.metrics.fps)}`,
     "",
+    summarizeTrajectory(payload),
+    "",
     "## Acceptance criteria",
     "- Reproduce or explain the combat feel issue from the context pack.",
+    "- Use the recent trajectory to identify the timing or hit-confirm failure mode.",
     "- Prefer the smallest safe tuning or logic change.",
     "- Add or update focused regression tests when combat math changes.",
     "- Do not collect PII, screenshots, session replay, or unrelated telemetry.",
