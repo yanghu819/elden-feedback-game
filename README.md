@@ -25,5 +25,5 @@ Open `http://localhost:3000`.
 ## Automation Shape
 
 - `/api/telemetry` receives anonymous combat summaries.
-- `/api/feedback` receives explicit player feedback and can create a GitHub issue when `GITHUB_TOKEN`, `REPO_OWNER`, and `REPO_NAME` are configured.
+- `/api/feedback` receives explicit player feedback and can create a GitHub issue when `GITHUB_TOKEN`, `FEEDBACK_GITHUB_OWNER`, and `FEEDBACK_GITHUB_REPO` are configured.
 - Codex should work from high-quality GitHub issues, produce PRs, and leave merge/release approval to humans.

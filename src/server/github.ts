@@ -10,8 +10,14 @@ const DEFAULT_LABELS = ["source:user-feedback", "needs-triage"];
 
 function getRepoConfig() {
   const token = process.env.GITHUB_TOKEN;
-  const owner = process.env.REPO_OWNER || process.env.GITHUB_REPOSITORY?.split("/")[0];
-  const repo = process.env.REPO_NAME || process.env.GITHUB_REPOSITORY?.split("/")[1];
+  const owner =
+    process.env.FEEDBACK_GITHUB_OWNER ||
+    process.env.REPO_OWNER ||
+    process.env.GITHUB_REPOSITORY?.split("/")[0];
+  const repo =
+    process.env.FEEDBACK_GITHUB_REPO ||
+    process.env.REPO_NAME ||
+    process.env.GITHUB_REPOSITORY?.split("/")[1];
   return { token, owner, repo };
 }
 

@@ -39,6 +39,15 @@ type BossAttack = {
   lunged: boolean;
 };
 
+type ImpactFx = {
+  position: Vec2;
+  startedAt: number;
+  durationMs: number;
+  color: number;
+  radius: number;
+  label: "player-hit" | "player-damaged" | "posture-break";
+};
+
 type Fighter = {
   position: Vec2;
   facing: Vec2;
@@ -79,6 +88,8 @@ export class BossDuelScene extends Phaser.Scene {
   private stats!: RunStats;
   private fps = 60;
   private telemetrySent = false;
+  private impactFx: ImpactFx[] = [];
+  private hitStopUntil = 0;
 
   constructor() {
     super("BossDuelScene");
@@ -117,6 +128,12 @@ export class BossDuelScene extends Phaser.Scene {
       return;
     }
 
+    if (time < this.hitStopUntil) {
+      this.draw(time);
+      this.publishSnapshot(time);
+      return;
+    }
+
     this.updatePlayer(time, dt);
     this.updateBoss(time, dt);
     this.resolvePlayerAttack(time);
@@ -147,6 +164,8 @@ export class BossDuelScene extends Phaser.Scene {
     this.nextBossDecisionAt = this.time.now + 900;
     this.bossMoveIndex = 0;
     this.telemetrySent = false;
+    this.impactFx = [];
+    this.hitStopUntil = 0;
     this.stats = {
       dodgeCount: 0,
       lightThrown: 0,
@@ -289,11 +308,15 @@ export class BossDuelScene extends Phaser.Scene {
       if (hit) {
         this.stats.hitsLanded += 1;
         applyDamage(this.boss.vitals, heavy ? 34 : 16, heavy ? 46 : 24);
+        this.addImpactFx(this.boss.position, time, heavy ? "posture-break" : "player-hit");
+        this.hitStopUntil = Math.max(this.hitStopUntil, time + (heavy ? 90 : 58));
         if (this.boss.vitals.posture >= this.boss.vitals.maxPosture) {
           applyDamage(this.boss.vitals, 42, 0);
           resetPosture(this.boss.vitals);
           this.bossAttack = null;
           this.nextBossDecisionAt = time + 1080;
+          this.addImpactFx(this.boss.position, time, "posture-break");
+          this.hitStopUntil = Math.max(this.hitStopUntil, time + 120);
         }
       }
     }
@@ -315,6 +338,8 @@ export class BossDuelScene extends Phaser.Scene {
       this.stats.damageTaken += move.damage;
       this.stats.lastDeathReason = this.bossAttack.id;
       this.stats.bossMoveHits[this.bossAttack.id] = (this.stats.bossMoveHits[this.bossAttack.id] || 0) + 1;
+      this.addImpactFx(this.player.position, time, "player-damaged");
+      this.hitStopUntil = Math.max(this.hitStopUntil, time + 46);
     }
   }
 
@@ -360,9 +385,11 @@ export class BossDuelScene extends Phaser.Scene {
 
     const move = BOSS_MOVES[this.bossAttack.id];
     const active = time >= this.bossAttack.activeAt && time <= this.bossAttack.endsAt;
+    const preActive = time < this.bossAttack.activeAt;
     const charge = Math.min(1, Math.max(0, (time - this.bossAttack.startedAt) / (this.bossAttack.activeAt - this.bossAttack.startedAt)));
-    const color = active ? 0xffd267 : 0xc34b3d;
-    const alpha = active ? 0.32 : 0.13 + charge * 0.18;
+    const snapWindow = preActive && this.bossAttack.activeAt - time <= 150;
+    const color = active ? 0xffd267 : snapWindow ? 0xff7b4a : 0xc34b3d;
+    const alpha = active ? 0.42 : snapWindow ? 0.34 : 0.12 + charge * 0.16;
 
     this.telegraphs.fillStyle(color, alpha);
     if (move.arcDegrees >= 360) {
@@ -374,6 +401,13 @@ export class BossDuelScene extends Phaser.Scene {
       this.telegraphs.lineTo(this.boss.position.x, this.boss.position.y);
       this.telegraphs.closePath();
       this.telegraphs.fillPath();
+    }
+
+    this.drawDangerOutline(move.range, move.arcDegrees, color, active ? 0.98 : snapWindow ? 0.82 : 0.38, active ? 5 : snapWindow ? 4 : 2);
+
+    if (snapWindow) {
+      const pulse = 1 + Math.sin(time / 26) * 0.07;
+      this.drawDangerOutline(move.range * pulse, move.arcDegrees, 0xfff0b3, 0.7, 2);
     }
 
     if (this.debugHitboxes) {
@@ -409,6 +443,8 @@ export class BossDuelScene extends Phaser.Scene {
       );
     }
 
+    this.drawImpactFx(time);
+
     const phaseTwo = this.boss.vitals.hp <= this.boss.vitals.maxHp * 0.5;
     this.actors.fillStyle(phaseTwo ? 0x6d2631 : 0x443d39, 1);
     this.actors.fillCircle(this.boss.position.x, this.boss.position.y, 35);
@@ -426,6 +462,62 @@ export class BossDuelScene extends Phaser.Scene {
       this.actors.strokeCircle(this.player.position.x, this.player.position.y, 19);
       this.actors.lineStyle(1, 0xffd267, 0.9);
       this.actors.strokeCircle(this.boss.position.x, this.boss.position.y, 35);
+    }
+  }
+
+  private drawDangerOutline(range: number, arcDegrees: number, color: number, alpha: number, width: number) {
+    if (!this.bossAttack) return;
+    this.telegraphs.lineStyle(width, color, alpha);
+    if (arcDegrees >= 360) {
+      this.telegraphs.strokeCircle(this.boss.position.x, this.boss.position.y, range);
+      return;
+    }
+
+    const facingAngle = Math.atan2(this.bossAttack.facing.y, this.bossAttack.facing.x);
+    const half = (arcDegrees * Math.PI) / 360;
+    this.telegraphs.beginPath();
+    this.telegraphs.arc(this.boss.position.x, this.boss.position.y, range, facingAngle - half, facingAngle + half, false);
+    this.telegraphs.strokePath();
+    this.telegraphs.lineBetween(
+      this.boss.position.x,
+      this.boss.position.y,
+      this.boss.position.x + Math.cos(facingAngle - half) * range,
+      this.boss.position.y + Math.sin(facingAngle - half) * range
+    );
+    this.telegraphs.lineBetween(
+      this.boss.position.x,
+      this.boss.position.y,
+      this.boss.position.x + Math.cos(facingAngle + half) * range,
+      this.boss.position.y + Math.sin(facingAngle + half) * range
+    );
+  }
+
+  private addImpactFx(position: Vec2, time: number, label: ImpactFx["label"]) {
+    const config = {
+      "player-hit": { color: 0xf5d889, radius: 34, durationMs: 240 },
+      "player-damaged": { color: 0xff6c55, radius: 42, durationMs: 300 },
+      "posture-break": { color: 0xffffff, radius: 58, durationMs: 340 }
+    }[label];
+
+    this.impactFx.push({
+      position: { ...position },
+      startedAt: time,
+      label,
+      ...config
+    });
+    this.impactFx = this.impactFx.slice(-10);
+  }
+
+  private drawImpactFx(time: number) {
+    this.impactFx = this.impactFx.filter((effect) => time - effect.startedAt <= effect.durationMs);
+    for (const effect of this.impactFx) {
+      const progress = Math.min(1, Math.max(0, (time - effect.startedAt) / effect.durationMs));
+      const radius = effect.radius * (0.35 + progress * 0.85);
+      const alpha = 1 - progress;
+      this.effects.lineStyle(effect.label === "posture-break" ? 5 : 3, effect.color, alpha);
+      this.effects.strokeCircle(effect.position.x, effect.position.y, radius);
+      this.effects.fillStyle(effect.color, alpha * 0.28);
+      this.effects.fillCircle(effect.position.x, effect.position.y, radius * 0.45);
     }
   }
 
