@@ -28,6 +28,8 @@ export function toTrajectorySample(snapshot: CombatSnapshot): CombatTrajectorySa
     counterWindows: snapshot.metrics.counterWindows,
     counterHits: snapshot.metrics.counterHits,
     counterReady: snapshot.metrics.counterReady,
+    lightChainStep: snapshot.metrics.lightChainStep,
+    maxLightChain: snapshot.metrics.maxLightChain,
     deathReason: snapshot.metrics.lastDeathReason,
     fps: Math.round(snapshot.metrics.fps)
   };
@@ -52,7 +54,9 @@ export function shouldKeepTrajectorySample(previous: CombatTrajectorySample | un
     previous.damageTaken !== next.damageTaken ||
     previous.counterWindows !== next.counterWindows ||
     previous.counterHits !== next.counterHits ||
-    previous.counterReady !== next.counterReady
+    previous.counterReady !== next.counterReady ||
+    previous.lightChainStep !== next.lightChainStep ||
+    previous.maxLightChain !== next.maxLightChain
   );
 }
 

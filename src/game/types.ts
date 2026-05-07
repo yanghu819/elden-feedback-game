@@ -43,6 +43,8 @@ export type CombatSnapshot = {
     counterWindows: number;
     counterHits: number;
     counterReady: boolean;
+    lightChainStep: number;
+    maxLightChain: number;
     lastDeathReason: string | null;
   };
 };
@@ -74,6 +76,8 @@ export type CombatTrajectorySample = {
   counterWindows: number;
   counterHits: number;
   counterReady: boolean;
+  lightChainStep: number;
+  maxLightChain: number;
   deathReason: string | null;
   fps: number;
 };

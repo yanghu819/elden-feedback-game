@@ -6,6 +6,8 @@ import {
   COUNTER_POSTURE_BONUS,
   COUNTER_STAMINA_REFUND,
   COUNTER_WINDOW_MS,
+  ATTACK_BUFFER_MS,
+  LIGHT_CHAIN_RESET_MS,
   PLAYER_ATTACKS,
   PLAYER_ATTACK_TIMINGS,
   PLAYER_MAX,
@@ -15,7 +17,11 @@ import {
   getBossPhase,
   getCounterPosture,
   getBossAttackPhase,
+  getNextLightChainStep,
+  getPlayerAttackProfile,
+  getPlayerAttackTiming,
   isInsideArc,
+  isAttackInputBuffered,
   isCounterDodgeCandidate,
   isCounterWindowReady,
   regenerateStamina,
@@ -47,6 +53,8 @@ function sample(overrides: Partial<CombatTrajectorySample>): CombatTrajectorySam
     counterWindows: 0,
     counterHits: 0,
     counterReady: false,
+    lightChainStep: 0,
+    maxLightChain: 0,
     deathReason: null,
     fps: 60,
     ...overrides
@@ -93,6 +101,30 @@ describe("combat core", () => {
     expect(PLAYER_ATTACKS.skill.arcDegrees).toBeLessThan(PLAYER_ATTACKS.light.arcDegrees);
     expect(PLAYER_ATTACKS.skill.damage).toBeLessThan(PLAYER_ATTACKS.heavy.damage);
     expect(PLAYER_ATTACK_TIMINGS.skill.recoveryMs).toBeLessThan(PLAYER_ATTACK_TIMINGS.heavy.recoveryMs);
+  });
+
+  it("buffers attack input briefly without making it permanent", () => {
+    expect(isAttackInputBuffered(1000, 1000 + ATTACK_BUFFER_MS)).toBe(true);
+    expect(isAttackInputBuffered(1000, 1000 + ATTACK_BUFFER_MS + 1)).toBe(false);
+    expect(isAttackInputBuffered(null, 1000)).toBe(false);
+  });
+
+  it("advances and resets the light chain deterministically", () => {
+    expect(getNextLightChainStep(0, 0, 1000)).toBe(1);
+    expect(getNextLightChainStep(1, 1000 + LIGHT_CHAIN_RESET_MS, 1200)).toBe(2);
+    expect(getNextLightChainStep(2, 1000 + LIGHT_CHAIN_RESET_MS, 1400)).toBe(3);
+    expect(getNextLightChainStep(3, 1000 + LIGHT_CHAIN_RESET_MS, 1500)).toBe(3);
+    expect(getNextLightChainStep(2, 1000 + LIGHT_CHAIN_RESET_MS, 1000 + LIGHT_CHAIN_RESET_MS + 1)).toBe(1);
+  });
+
+  it("makes the third light a posture finisher without replacing heavy damage", () => {
+    const first = getPlayerAttackProfile("light", 1);
+    const third = getPlayerAttackProfile("light", 3);
+
+    expect(third.posture).toBeGreaterThan(first.posture);
+    expect(third.range).toBeGreaterThan(first.range);
+    expect(third.damage).toBeLessThan(PLAYER_ATTACKS.heavy.damage);
+    expect(getPlayerAttackTiming("light", 3).recoveryMs).toBeGreaterThan(getPlayerAttackTiming("light", 2).recoveryMs);
   });
 
   it("classifies boss attack timing into windup, snap, active, and recovery", () => {

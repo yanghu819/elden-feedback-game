@@ -23,6 +23,8 @@ export const COUNTER_NEAR_MISS_ARC_PADDING_DEGREES = 10;
 export const COUNTER_STAMINA_REFUND = 18;
 export const COUNTER_STAGGER_MS = 920;
 export const BOSS_PRESSURE_PHASE_MS = 12_000;
+export const ATTACK_BUFFER_MS = 220;
+export const LIGHT_CHAIN_RESET_MS = 760;
 
 export const PLAYER_ATTACKS = {
   light: {
@@ -50,6 +52,14 @@ export const PLAYER_ATTACKS = {
 
 export type PlayerAttackKind = keyof typeof PLAYER_ATTACKS;
 
+export type AttackProfile = {
+  range: number;
+  arcDegrees: number;
+  damage: number;
+  posture: number;
+  staminaCost: number;
+};
+
 export const PLAYER_ATTACK_TIMINGS: Record<
   PlayerAttackKind,
   {
@@ -72,6 +82,39 @@ export const PLAYER_ATTACK_TIMINGS: Record<
     activeDelayMs: 170,
     activeMs: 135,
     recoveryMs: 520
+  }
+};
+
+export const LIGHT_CHAIN_PROFILES: Record<1 | 2 | 3, AttackProfile> = {
+  1: PLAYER_ATTACKS.light,
+  2: {
+    ...PLAYER_ATTACKS.light,
+    range: PLAYER_ATTACKS.light.range + 8,
+    arcDegrees: PLAYER_ATTACKS.light.arcDegrees + 8,
+    damage: PLAYER_ATTACKS.light.damage + 2,
+    posture: PLAYER_ATTACKS.light.posture + 6
+  },
+  3: {
+    ...PLAYER_ATTACKS.light,
+    range: PLAYER_ATTACKS.light.range + 14,
+    arcDegrees: PLAYER_ATTACKS.light.arcDegrees + 4,
+    damage: PLAYER_ATTACKS.light.damage + 6,
+    posture: PLAYER_ATTACKS.light.posture + 16,
+    staminaCost: PLAYER_ATTACKS.light.staminaCost + 4
+  }
+};
+
+export const LIGHT_CHAIN_TIMINGS: Record<1 | 2 | 3, (typeof PLAYER_ATTACK_TIMINGS)["light"]> = {
+  1: PLAYER_ATTACK_TIMINGS.light,
+  2: {
+    activeDelayMs: 110,
+    activeMs: 110,
+    recoveryMs: 350
+  },
+  3: {
+    activeDelayMs: 165,
+    activeMs: 130,
+    recoveryMs: 480
   }
 };
 
@@ -190,6 +233,27 @@ export function isCounterWindowReady(counterUntil: number, time: number) {
 export function getBossPhase(hp: number, maxHp: number, elapsedMs: number, counterHits: number): 1 | 2 {
   if (hp <= maxHp * 0.5 || elapsedMs >= BOSS_PRESSURE_PHASE_MS || counterHits > 0) return 2;
   return 1;
+}
+
+export function isAttackInputBuffered(queuedAt: number | null | undefined, time: number) {
+  return queuedAt != null && time - queuedAt <= ATTACK_BUFFER_MS;
+}
+
+export function getNextLightChainStep(currentStep: number, chainExpiresAt: number, time: number): 1 | 2 | 3 {
+  if (currentStep <= 0 || time > chainExpiresAt) return 1;
+  return Math.min(3, currentStep + 1) as 1 | 2 | 3;
+}
+
+export function getPlayerAttackProfile(kind: PlayerAttackKind, lightChainStep: number): AttackProfile {
+  if (kind !== "light") return PLAYER_ATTACKS[kind];
+  const step = clamp(Math.round(lightChainStep), 1, 3) as 1 | 2 | 3;
+  return LIGHT_CHAIN_PROFILES[step];
+}
+
+export function getPlayerAttackTiming(kind: PlayerAttackKind, lightChainStep: number) {
+  if (kind !== "light") return PLAYER_ATTACK_TIMINGS[kind];
+  const step = clamp(Math.round(lightChainStep), 1, 3) as 1 | 2 | 3;
+  return LIGHT_CHAIN_TIMINGS[step];
 }
 
 export function getBossAttackPhase(

@@ -38,6 +38,7 @@ function summarizeTrajectory(payload: FeedbackPayload) {
     const currentCounterWindows = current.counterWindows ?? 0;
     const previousCounterHits = previous.counterHits ?? 0;
     const currentCounterHits = current.counterHits ?? 0;
+    const currentLightChain = current.lightChainStep ?? 0;
     if (current.damageTaken > previous.damageTaken) {
       damageEvents.push(
         `- ${current.t}ms: +${current.damageTaken - previous.damageTaken} damage during ${current.bossMove}/${current.bossAttackPhase}, player HP ${current.playerHp}`
@@ -51,7 +52,7 @@ function summarizeTrajectory(payload: FeedbackPayload) {
     }
     if (current.light > previous.light || current.heavy > previous.heavy || currentSkill > previousSkill) {
       attackEvents.push(
-        `- ${current.t}ms: attacks light=${current.light}, heavy=${current.heavy}, skill=${currentSkill}, player state ${current.playerActionState}, stamina ${current.stamina}, boss ${current.bossMove}/${current.bossAttackPhase}`
+        `- ${current.t}ms: attacks light=${current.light}, heavy=${current.heavy}, skill=${currentSkill}, chain=${currentLightChain}, player state ${current.playerActionState}, stamina ${current.stamina}, boss ${current.bossMove}/${current.bossAttackPhase}`
       );
     }
     if (currentCounterWindows > previousCounterWindows) {
@@ -63,7 +64,7 @@ function summarizeTrajectory(payload: FeedbackPayload) {
   }
 
   const lastRows = trajectory.slice(-14).map((sample) =>
-    `| ${sample.t} | ${sample.status} | ${sample.playerHp} | ${sample.stamina} | ${sample.bossHp} | ${sample.bossMove} | ${sample.bossAttackPhase} | ${sample.playerActionState} | ${sample.dodges} | ${sample.light} | ${sample.heavy} | ${sample.skill ?? 0} | ${sample.hits} | ${sample.damageTaken} | ${sample.counterReady ? "yes" : "no"} | ${sample.counterWindows ?? 0} | ${sample.counterHits ?? 0} |`
+    `| ${sample.t} | ${sample.status} | ${sample.playerHp} | ${sample.stamina} | ${sample.bossHp} | ${sample.bossMove} | ${sample.bossAttackPhase} | ${sample.playerActionState} | ${sample.dodges} | ${sample.light} | ${sample.heavy} | ${sample.skill ?? 0} | ${sample.lightChainStep ?? 0} | ${sample.maxLightChain ?? 0} | ${sample.hits} | ${sample.damageTaken} | ${sample.counterReady ? "yes" : "no"} | ${sample.counterWindows ?? 0} | ${sample.counterHits ?? 0} |`
   );
 
   return [
@@ -85,9 +86,9 @@ function summarizeTrajectory(payload: FeedbackPayload) {
     "Counter events:",
     counterEvents.length ? counterEvents.join("\n") : "- None",
     "",
-    "| t(ms) | status | player HP | stamina | boss HP | boss move | boss phase | player state | dodges | light | heavy | skill | hits | damage | counter ready | counter windows | counter hits |",
-    "| --- | --- | ---: | ---: | ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: |",
-    ...(lastRows.length ? lastRows : ["| n/a | n/a | 0 | 0 | 0 | n/a | idle | idle | 0 | 0 | 0 | 0 | 0 | 0 | no | 0 | 0 |"])
+    "| t(ms) | status | player HP | stamina | boss HP | boss move | boss phase | player state | dodges | light | heavy | skill | chain | max chain | hits | damage | counter ready | counter windows | counter hits |",
+    "| --- | --- | ---: | ---: | ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: |",
+    ...(lastRows.length ? lastRows : ["| n/a | n/a | 0 | 0 | 0 | n/a | idle | idle | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | no | 0 | 0 |"])
   ].join("\n");
 }
 
@@ -111,6 +112,7 @@ export function buildFeedbackIssueBody(payload: FeedbackPayload) {
     `- boss_hp: ${Math.round(context.boss.hp)} / ${context.boss.maxHp}`,
     `- dodge_count: ${context.metrics.dodgeCount}`,
     `- attacks: light=${context.metrics.lightThrown}, heavy=${context.metrics.heavyThrown}, skill=${context.metrics.skillThrown ?? 0}, hits=${context.metrics.hitsLanded}`,
+    `- light_chain: current=${context.metrics.lightChainStep ?? 0}, max=${context.metrics.maxLightChain ?? 0}`,
     `- counters: windows=${context.metrics.counterWindows ?? 0}, hits=${context.metrics.counterHits ?? 0}, ready=${context.metrics.counterReady ? "yes" : "no"}`,
     `- damage_taken: ${context.metrics.damageTaken}`,
     `- last_death_reason: ${context.metrics.lastDeathReason || "n/a"}`,

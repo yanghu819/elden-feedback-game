@@ -5,8 +5,7 @@ import {
   BOSS_MOVES,
   COUNTER_STAGGER_MS,
   COUNTER_WINDOW_MS,
-  PLAYER_ATTACKS,
-  PLAYER_ATTACK_TIMINGS,
+  LIGHT_CHAIN_RESET_MS,
   PLAYER_MAX,
   applyDamage,
   applyCounterStaminaRefund,
@@ -17,6 +16,10 @@ import {
   getBossPhase,
   getCounterPosture,
   getBossAttackPhase,
+  getNextLightChainStep,
+  getPlayerAttackProfile,
+  getPlayerAttackTiming,
+  isAttackInputBuffered,
   isCounterDodgeCandidate,
   isInsideArc,
   isCounterWindowReady,
@@ -31,10 +34,16 @@ import type { ActorVitals, BossAttackPhase, BossMoveId, CombatRunSummary, Combat
 
 type PlayerAttack = {
   kind: PlayerAttackKind;
+  lightChainStep: number;
   activeAt: number;
   endsAt: number;
   recoveryEndsAt: number;
   resolved: boolean;
+};
+
+type QueuedAttack = {
+  kind: PlayerAttackKind;
+  queuedAt: number;
 };
 
 type BossAttack = {
@@ -54,7 +63,7 @@ type ImpactFx = {
   durationMs: number;
   color: number;
   radius: number;
-  label: "player-hit" | "skill-hit" | "counter-hit" | "player-damaged" | "posture-break";
+  label: "player-hit" | "skill-hit" | "chain-hit" | "counter-hit" | "player-damaged" | "posture-break";
 };
 
 type Fighter = {
@@ -72,6 +81,7 @@ type RunStats = {
   damageTaken: number;
   counterWindows: number;
   counterHits: number;
+  maxLightChain: number;
   lastDeathReason: string | null;
   bossMoveUses: Record<string, number>;
   bossMoveHits: Record<string, number>;
@@ -107,6 +117,10 @@ export class BossDuelScene extends Phaser.Scene {
   private counterFlashUntil = 0;
   private lastBossPhase: 1 | 2 = 1;
   private phaseSurgeUntil = 0;
+  private queuedAttack: QueuedAttack | null = null;
+  private lightChainStep = 0;
+  private lightChainExpiresAt = 0;
+  private chainFlashUntil = 0;
 
   constructor() {
     super("BossDuelScene");
@@ -189,6 +203,10 @@ export class BossDuelScene extends Phaser.Scene {
     this.counterFlashUntil = 0;
     this.lastBossPhase = 1;
     this.phaseSurgeUntil = 0;
+    this.queuedAttack = null;
+    this.lightChainStep = 0;
+    this.lightChainExpiresAt = 0;
+    this.chainFlashUntil = 0;
     this.stats = {
       dodgeCount: 0,
       lightThrown: 0,
@@ -198,6 +216,7 @@ export class BossDuelScene extends Phaser.Scene {
       damageTaken: 0,
       counterWindows: 0,
       counterHits: 0,
+      maxLightChain: 0,
       lastDeathReason: null,
       bossMoveUses: {},
       bossMoveHits: {}
@@ -211,6 +230,11 @@ export class BossDuelScene extends Phaser.Scene {
 
     const attacking = Boolean(this.playerAttack && time < this.playerAttack.recoveryEndsAt);
     const dodging = time < this.dodgeEndsAt;
+    const attackInput = this.readAttackInput();
+    if (attackInput) {
+      this.queuedAttack = { kind: attackInput, queuedAt: time };
+    }
+
     regenerateStamina(this.player.vitals, dt, attacking || dodging);
 
     if (!attacking && !dodging) {
@@ -241,12 +265,9 @@ export class BossDuelScene extends Phaser.Scene {
     }
 
     if (!attacking && !dodging) {
-      if (Phaser.Input.Keyboard.JustDown(this.keys.E)) {
-        this.startPlayerAttack("skill", time);
-      } else if (Phaser.Input.Keyboard.JustDown(this.keys.J) || pointer.leftButtonDown()) {
-        this.startPlayerAttack("light", time);
-      } else if (Phaser.Input.Keyboard.JustDown(this.keys.K) || pointer.rightButtonDown()) {
-        this.startPlayerAttack("heavy", time);
+      const queuedAttack = this.queuedAttack && isAttackInputBuffered(this.queuedAttack.queuedAt, time) ? this.queuedAttack.kind : null;
+      if (queuedAttack && this.startPlayerAttack(queuedAttack, time)) {
+        this.queuedAttack = null;
       }
     }
   }
@@ -296,11 +317,22 @@ export class BossDuelScene extends Phaser.Scene {
   }
 
   private startPlayerAttack(kind: PlayerAttackKind, time: number) {
-    const attack = PLAYER_ATTACKS[kind];
-    if (!spendStamina(this.player.vitals, attack.staminaCost)) return;
+    const lightChainStep = kind === "light" ? getNextLightChainStep(this.lightChainStep, this.lightChainExpiresAt, time) : 0;
+    const attack = getPlayerAttackProfile(kind, lightChainStep);
+    if (!spendStamina(this.player.vitals, attack.staminaCost)) return false;
     if (kind === "heavy") this.stats.heavyThrown += 1;
     else if (kind === "skill") this.stats.skillThrown += 1;
-    else this.stats.lightThrown += 1;
+    else {
+      this.stats.lightThrown += 1;
+      this.lightChainStep = lightChainStep;
+      this.lightChainExpiresAt = time + LIGHT_CHAIN_RESET_MS;
+      this.stats.maxLightChain = Math.max(this.stats.maxLightChain, lightChainStep);
+    }
+
+    if (kind !== "light") {
+      this.lightChainStep = 0;
+      this.lightChainExpiresAt = 0;
+    }
 
     if (kind === "skill") {
       this.player.position = clampToArena({
@@ -309,14 +341,16 @@ export class BossDuelScene extends Phaser.Scene {
       });
     }
 
-    const timing = PLAYER_ATTACK_TIMINGS[kind];
+    const timing = getPlayerAttackTiming(kind, lightChainStep);
     this.playerAttack = {
       kind,
+      lightChainStep,
       activeAt: time + timing.activeDelayMs,
       endsAt: time + timing.activeDelayMs + timing.activeMs,
       recoveryEndsAt: time + timing.recoveryMs,
       resolved: false
     };
+    return true;
   }
 
   private startBossAttack(id: Exclude<BossMoveId, "watching" | "broken">, time: number) {
@@ -338,7 +372,7 @@ export class BossDuelScene extends Phaser.Scene {
   private resolvePlayerAttack(time: number) {
     if (!this.playerAttack) return;
     if (time >= this.playerAttack.activeAt && time <= this.playerAttack.endsAt && !this.playerAttack.resolved) {
-      const attack = PLAYER_ATTACKS[this.playerAttack.kind];
+      const attack = getPlayerAttackProfile(this.playerAttack.kind, this.playerAttack.lightChainStep);
       const counterReady = this.isCounterReady(time);
       const posture = getCounterPosture(attack.posture, counterReady);
       const hit = isInsideArc(
@@ -352,11 +386,15 @@ export class BossDuelScene extends Phaser.Scene {
       if (hit) {
         this.stats.hitsLanded += 1;
         applyDamage(this.boss.vitals, attack.damage, posture);
+        const chainFinisher = this.playerAttack.kind === "light" && this.playerAttack.lightChainStep === 3;
         const hitLabel =
-          counterReady ? "counter-hit" : this.playerAttack.kind === "heavy" ? "posture-break" : this.playerAttack.kind === "skill" ? "skill-hit" : "player-hit";
-        const stopMs = counterReady ? 104 : this.playerAttack.kind === "heavy" ? 90 : this.playerAttack.kind === "skill" ? 76 : 58;
+          counterReady ? "counter-hit" : chainFinisher ? "chain-hit" : this.playerAttack.kind === "heavy" ? "posture-break" : this.playerAttack.kind === "skill" ? "skill-hit" : "player-hit";
+        const stopMs = counterReady ? 104 : chainFinisher ? 82 : this.playerAttack.kind === "heavy" ? 90 : this.playerAttack.kind === "skill" ? 76 : 58;
         this.addImpactFx(this.boss.position, time, hitLabel);
         this.hitStopUntil = Math.max(this.hitStopUntil, time + stopMs);
+        if (chainFinisher) {
+          this.chainFlashUntil = time + 260;
+        }
         if (counterReady) {
           this.stats.counterHits += 1;
           applyCounterStaminaRefund(this.player.vitals, counterReady);
@@ -527,11 +565,12 @@ export class BossDuelScene extends Phaser.Scene {
     this.drawCounterReadiness(time);
 
     if (this.playerAttack) {
-      const attack = PLAYER_ATTACKS[this.playerAttack.kind];
+      const attack = getPlayerAttackProfile(this.playerAttack.kind, this.playerAttack.lightChainStep);
       const heavy = this.playerAttack.kind === "heavy";
       const skill = this.playerAttack.kind === "skill";
+      const chainFinisher = this.playerAttack.kind === "light" && this.playerAttack.lightChainStep === 3;
       const windup = time < this.playerAttack.activeAt;
-      this.effects.lineStyle(skill ? 6 : heavy ? 7 : 5, windup ? 0x8d7660 : skill ? 0x8bd8d2 : 0xe8d38a, windup ? 0.5 : 0.88);
+      this.effects.lineStyle(skill ? 6 : heavy || chainFinisher ? 7 : 5, windup ? 0x8d7660 : skill ? 0x8bd8d2 : chainFinisher ? 0xfff0b3 : 0xe8d38a, windup ? 0.5 : 0.88);
       this.effects.lineBetween(
         this.player.position.x,
         this.player.position.y,
@@ -545,6 +584,10 @@ export class BossDuelScene extends Phaser.Scene {
           this.player.position.y + this.player.facing.y * 62,
           windup ? 18 : 30
         );
+      }
+      if (chainFinisher || time < this.chainFlashUntil) {
+        this.effects.lineStyle(2, 0xfff0b3, windup ? 0.34 : 0.66);
+        this.effects.strokeCircle(this.player.position.x, this.player.position.y, windup ? 24 : 36);
       }
     }
 
@@ -723,6 +766,7 @@ export class BossDuelScene extends Phaser.Scene {
     const config = {
       "player-hit": { color: 0xf5d889, radius: 34, durationMs: 240 },
       "skill-hit": { color: 0x8bd8d2, radius: 44, durationMs: 280 },
+      "chain-hit": { color: 0xfff0b3, radius: 48, durationMs: 320 },
       "counter-hit": { color: 0x8bd8d2, radius: 54, durationMs: 360 },
       "player-damaged": { color: 0xff6c55, radius: 42, durationMs: 300 },
       "posture-break": { color: 0xffffff, radius: 58, durationMs: 340 }
@@ -753,7 +797,7 @@ export class BossDuelScene extends Phaser.Scene {
   private hasRecentBossHitFx(time: number) {
     return this.impactFx.some(
       (effect) =>
-        (effect.label === "player-hit" || effect.label === "skill-hit" || effect.label === "counter-hit" || effect.label === "posture-break") &&
+        (effect.label === "player-hit" || effect.label === "skill-hit" || effect.label === "chain-hit" || effect.label === "counter-hit" || effect.label === "posture-break") &&
         time - effect.startedAt >= 0 &&
         time - effect.startedAt <= Math.min(160, effect.durationMs)
     );
@@ -804,6 +848,8 @@ export class BossDuelScene extends Phaser.Scene {
         counterWindows: this.stats.counterWindows,
         counterHits: this.stats.counterHits,
         counterReady: this.isCounterReady(time),
+        lightChainStep: time <= this.lightChainExpiresAt ? this.lightChainStep : 0,
+        maxLightChain: this.stats.maxLightChain,
         lastDeathReason: this.stats.lastDeathReason
       }
     };
@@ -850,6 +896,14 @@ export class BossDuelScene extends Phaser.Scene {
       return "moving";
     }
     return "idle";
+  }
+
+  private readAttackInput(): PlayerAttackKind | null {
+    const pointer = this.input.activePointer;
+    if (Phaser.Input.Keyboard.JustDown(this.keys.E)) return "skill";
+    if (Phaser.Input.Keyboard.JustDown(this.keys.K) || pointer.rightButtonDown()) return "heavy";
+    if (Phaser.Input.Keyboard.JustDown(this.keys.J) || pointer.leftButtonDown()) return "light";
+    return null;
   }
 
   private isCounterReady(time: number) {

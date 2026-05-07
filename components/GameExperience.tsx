@@ -40,6 +40,8 @@ const emptySnapshot: CombatSnapshot = {
     counterWindows: 0,
     counterHits: 0,
     counterReady: false,
+    lightChainStep: 0,
+    maxLightChain: 0,
     lastDeathReason: null
   }
 };
