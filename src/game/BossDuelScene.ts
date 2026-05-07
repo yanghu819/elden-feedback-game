@@ -3,6 +3,8 @@ import {
   ARENA,
   BOSS_MAX,
   BOSS_MOVES,
+  DANGER_FRAME_FLASH,
+  HIT_CONFIRM,
   PLAYER_ATTACKS,
   PLAYER_ATTACK_TIMINGS,
   PLAYER_MAX,
@@ -328,6 +330,8 @@ export class BossDuelScene extends Phaser.Scene {
         const stopMs = this.playerAttack.kind === "heavy" ? 90 : this.playerAttack.kind === "skill" ? 76 : 58;
         this.addImpactFx(this.boss.position, time, hitLabel);
         this.hitStopUntil = Math.max(this.hitStopUntil, time + stopMs);
+        const confirm = HIT_CONFIRM[this.playerAttack.kind];
+        this.cameras.main.shake(confirm.shakeDurationMs, confirm.shakeIntensity / 1000);
         if (this.boss.vitals.posture >= this.boss.vitals.maxPosture) {
           applyDamage(this.boss.vitals, 42, 0);
           resetPosture(this.boss.vitals);
@@ -417,7 +421,7 @@ export class BossDuelScene extends Phaser.Scene {
 
     const charge = Math.min(1, Math.max(0, (time - this.bossAttack.startedAt) / (this.bossAttack.activeAt - this.bossAttack.startedAt)));
     const color = attackPhase === "active" ? 0xfff0b3 : attackPhase === "snap" ? 0xffd267 : 0xb53b35;
-    const alpha = attackPhase === "active" ? 0.46 : attackPhase === "snap" ? 0.36 : 0.1 + charge * 0.14;
+    const alpha = attackPhase === "active" ? DANGER_FRAME_FLASH[this.bossAttack.id].fillAlpha : attackPhase === "snap" ? 0.36 : 0.1 + charge * 0.14;
 
     this.telegraphs.fillStyle(color, alpha);
     if (move.arcDegrees >= 360) {
@@ -444,6 +448,25 @@ export class BossDuelScene extends Phaser.Scene {
     if (attackPhase === "snap") {
       const pulse = 1 + Math.sin(time / 26) * 0.07;
       this.drawDangerOutline(move.range * pulse, move.arcDegrees, 0xffffff, 0.72, 2);
+    }
+
+    if (attackPhase === "active") {
+      const flash = DANGER_FRAME_FLASH[this.bossAttack.id];
+      const pulse = 1 + Math.sin(time / flash.pulseSpeed) * 0.05;
+      this.drawDangerOutline(
+        move.range * pulse,
+        move.arcDegrees,
+        flash.edgeColor,
+        flash.edgeAlpha,
+        flash.edgeWidth
+      );
+      this.drawDangerOutline(
+        move.range * 0.6 * pulse,
+        move.arcDegrees,
+        flash.edgeColor,
+        flash.edgeAlpha * 0.5,
+        3
+      );
     }
 
     if (this.debugHitboxes) {
@@ -642,10 +665,10 @@ export class BossDuelScene extends Phaser.Scene {
 
   private addImpactFx(position: Vec2, time: number, label: ImpactFx["label"]) {
     const config = {
-      "player-hit": { color: 0xf5d889, radius: 34, durationMs: 240 },
-      "skill-hit": { color: 0x8bd8d2, radius: 44, durationMs: 280 },
+      "player-hit": { color: 0xf5d889, radius: HIT_CONFIRM.light.flashRadius, durationMs: HIT_CONFIRM.light.flashDurationMs },
+      "skill-hit": { color: 0x8bd8d2, radius: HIT_CONFIRM.skill.flashRadius, durationMs: HIT_CONFIRM.skill.flashDurationMs },
       "player-damaged": { color: 0xff6c55, radius: 42, durationMs: 300 },
-      "posture-break": { color: 0xffffff, radius: 58, durationMs: 340 }
+      "posture-break": { color: 0xffffff, radius: HIT_CONFIRM.heavy.flashRadius, durationMs: HIT_CONFIRM.heavy.flashDurationMs }
     }[label];
 
     this.impactFx.push({
@@ -661,12 +684,22 @@ export class BossDuelScene extends Phaser.Scene {
     this.impactFx = this.impactFx.filter((effect) => time - effect.startedAt <= effect.durationMs);
     for (const effect of this.impactFx) {
       const progress = Math.min(1, Math.max(0, (time - effect.startedAt) / effect.durationMs));
+      const isPlayerHit = effect.label === "player-hit" || effect.label === "skill-hit" || effect.label === "posture-break";
       const radius = effect.radius * (0.35 + progress * 0.85);
       const alpha = 1 - progress;
-      this.effects.lineStyle(effect.label === "posture-break" ? 5 : 3, effect.color, alpha);
+      const lineWidth = effect.label === "posture-break" ? 6 : isPlayerHit ? 4 : 3;
+      this.effects.lineStyle(lineWidth, effect.color, alpha);
       this.effects.strokeCircle(effect.position.x, effect.position.y, radius);
-      this.effects.fillStyle(effect.color, alpha * 0.28);
+      const fillAlpha = isPlayerHit ? alpha * 0.42 : alpha * 0.28;
+      this.effects.fillStyle(effect.color, fillAlpha);
       this.effects.fillCircle(effect.position.x, effect.position.y, radius * 0.45);
+      const BURST_PROGRESS_CUTOFF = 0.3;
+      const BURST_ALPHA = 0.6;
+      if (isPlayerHit && progress < BURST_PROGRESS_CUTOFF) {
+        const burstAlpha = (1 - progress / BURST_PROGRESS_CUTOFF) * BURST_ALPHA;
+        this.effects.lineStyle(2, 0xffffff, burstAlpha);
+        this.effects.strokeCircle(effect.position.x, effect.position.y, radius * 0.7);
+      }
     }
   }
 

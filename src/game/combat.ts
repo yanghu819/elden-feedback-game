@@ -218,6 +218,53 @@ export function chooseBossMove(distanceToPlayer: number, phase: 1 | 2, moveIndex
   return pattern[moveIndex % pattern.length];
 }
 
+export const DANGER_FRAME_FLASH = {
+  "delayed-lunge": {
+    edgeColor: 0xff4444,
+    edgeAlpha: 0.92,
+    edgeWidth: 8,
+    fillAlpha: 0.32,
+    pulseSpeed: 18
+  },
+  "grave-sweep": {
+    edgeColor: 0xff6622,
+    edgeAlpha: 0.88,
+    edgeWidth: 7,
+    fillAlpha: 0.28,
+    pulseSpeed: 22
+  },
+  "ash-slam": {
+    edgeColor: 0xffaa33,
+    edgeAlpha: 0.85,
+    edgeWidth: 7,
+    fillAlpha: 0.26,
+    pulseSpeed: 20
+  }
+} as const satisfies Record<
+  Exclude<BossMoveId, "watching" | "broken">,
+  {
+    edgeColor: number;
+    edgeAlpha: number;
+    edgeWidth: number;
+    fillAlpha: number;
+    pulseSpeed: number;
+  }
+>;
+
+export const HIT_CONFIRM = {
+  light: { shakeIntensity: 1.5, shakeDurationMs: 80, flashRadius: 40, flashDurationMs: 200 },
+  heavy: { shakeIntensity: 3.0, shakeDurationMs: 120, flashRadius: 52, flashDurationMs: 260 },
+  skill: { shakeIntensity: 2.0, shakeDurationMs: 100, flashRadius: 48, flashDurationMs: 240 }
+} as const satisfies Record<
+  PlayerAttackKind,
+  {
+    shakeIntensity: number;
+    shakeDurationMs: number;
+    flashRadius: number;
+    flashDurationMs: number;
+  }
+>;
+
 export function makeRunId() {
   return `run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
