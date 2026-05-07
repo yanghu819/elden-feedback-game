@@ -19,6 +19,8 @@ export async function POST(request: Request) {
     releaseSha: payload.releaseSha,
     elapsedMs: Math.round(payload.elapsedMs),
     status: payload.status,
+    bossAttackPhase: payload.bossAttackPhase,
+    playerActionState: payload.playerActionState,
     lastDeathReason: payload.metrics.lastDeathReason,
     dodgeCount: payload.metrics.dodgeCount,
     hitsLanded: payload.metrics.hitsLanded,

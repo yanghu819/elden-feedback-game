@@ -3,12 +3,14 @@ import {
   ARENA,
   BOSS_MAX,
   BOSS_MOVES,
+  PLAYER_ATTACKS,
   PLAYER_MAX,
   applyDamage,
   chooseBossMove,
   clampToArena,
   directionTo,
   distance,
+  getBossAttackPhase,
   isInsideArc,
   makeRunId,
   normalize,
@@ -16,7 +18,7 @@ import {
   resetPosture,
   spendStamina
 } from "./combat";
-import type { ActorVitals, BossMoveId, CombatRunSummary, CombatSnapshot, Vec2 } from "./types";
+import type { ActorVitals, BossMoveId, CombatRunSummary, CombatSnapshot, PlayerActionState, Vec2 } from "./types";
 
 type AttackKind = "light" | "heavy";
 
@@ -264,16 +266,15 @@ export class BossDuelScene extends Phaser.Scene {
   }
 
   private startPlayerAttack(kind: AttackKind, time: number) {
-    const heavy = kind === "heavy";
-    const cost = heavy ? 34 : 18;
-    if (!spendStamina(this.player.vitals, cost)) return;
-    if (heavy) this.stats.heavyThrown += 1;
+    const attack = PLAYER_ATTACKS[kind];
+    if (!spendStamina(this.player.vitals, attack.staminaCost)) return;
+    if (kind === "heavy") this.stats.heavyThrown += 1;
     else this.stats.lightThrown += 1;
     this.playerAttack = {
       kind,
-      activeAt: time + (heavy ? 250 : 130),
-      endsAt: time + (heavy ? 365 : 230),
-      recoveryEndsAt: time + (heavy ? 640 : 390),
+      activeAt: time + (kind === "heavy" ? 250 : 130),
+      endsAt: time + (kind === "heavy" ? 365 : 230),
+      recoveryEndsAt: time + (kind === "heavy" ? 640 : 390),
       resolved: false
     };
   }
@@ -296,20 +297,20 @@ export class BossDuelScene extends Phaser.Scene {
   private resolvePlayerAttack(time: number) {
     if (!this.playerAttack) return;
     if (time >= this.playerAttack.activeAt && time <= this.playerAttack.endsAt && !this.playerAttack.resolved) {
-      const heavy = this.playerAttack.kind === "heavy";
+      const attack = PLAYER_ATTACKS[this.playerAttack.kind];
       const hit = isInsideArc(
         this.player.position,
         this.player.facing,
         this.boss.position,
-        heavy ? 108 : 86,
-        heavy ? 86 : 118
+        attack.range,
+        attack.arcDegrees
       );
       this.playerAttack.resolved = true;
       if (hit) {
         this.stats.hitsLanded += 1;
-        applyDamage(this.boss.vitals, heavy ? 34 : 16, heavy ? 46 : 24);
-        this.addImpactFx(this.boss.position, time, heavy ? "posture-break" : "player-hit");
-        this.hitStopUntil = Math.max(this.hitStopUntil, time + (heavy ? 90 : 58));
+        applyDamage(this.boss.vitals, attack.damage, attack.posture);
+        this.addImpactFx(this.boss.position, time, this.playerAttack.kind === "heavy" ? "posture-break" : "player-hit");
+        this.hitStopUntil = Math.max(this.hitStopUntil, time + (this.playerAttack.kind === "heavy" ? 90 : 58));
         if (this.boss.vitals.posture >= this.boss.vitals.maxPosture) {
           applyDamage(this.boss.vitals, 42, 0);
           resetPosture(this.boss.vitals);
@@ -384,12 +385,22 @@ export class BossDuelScene extends Phaser.Scene {
     if (!this.bossAttack) return;
 
     const move = BOSS_MOVES[this.bossAttack.id];
-    const active = time >= this.bossAttack.activeAt && time <= this.bossAttack.endsAt;
-    const preActive = time < this.bossAttack.activeAt;
+    const attackPhase = getBossAttackPhase(this.bossAttack, time);
+    if (attackPhase === "idle") return;
+
+    if (attackPhase === "recovery") {
+      this.telegraphs.fillStyle(0x7d8a74, 0.08);
+      this.telegraphs.fillCircle(this.boss.position.x, this.boss.position.y, 58);
+      this.telegraphs.lineStyle(3, 0x9fab8e, 0.52);
+      this.telegraphs.strokeCircle(this.boss.position.x, this.boss.position.y, 58);
+      this.telegraphs.lineStyle(1, 0xd8b25e, 0.28);
+      this.telegraphs.strokeCircle(this.boss.position.x, this.boss.position.y, 72);
+      return;
+    }
+
     const charge = Math.min(1, Math.max(0, (time - this.bossAttack.startedAt) / (this.bossAttack.activeAt - this.bossAttack.startedAt)));
-    const snapWindow = preActive && this.bossAttack.activeAt - time <= 150;
-    const color = active ? 0xffd267 : snapWindow ? 0xff7b4a : 0xc34b3d;
-    const alpha = active ? 0.42 : snapWindow ? 0.34 : 0.12 + charge * 0.16;
+    const color = attackPhase === "active" ? 0xfff0b3 : attackPhase === "snap" ? 0xffd267 : 0xb53b35;
+    const alpha = attackPhase === "active" ? 0.46 : attackPhase === "snap" ? 0.36 : 0.1 + charge * 0.14;
 
     this.telegraphs.fillStyle(color, alpha);
     if (move.arcDegrees >= 360) {
@@ -403,11 +414,17 @@ export class BossDuelScene extends Phaser.Scene {
       this.telegraphs.fillPath();
     }
 
-    this.drawDangerOutline(move.range, move.arcDegrees, color, active ? 0.98 : snapWindow ? 0.82 : 0.38, active ? 5 : snapWindow ? 4 : 2);
+    this.drawDangerOutline(
+      move.range,
+      move.arcDegrees,
+      color,
+      attackPhase === "active" ? 1 : attackPhase === "snap" ? 0.88 : 0.34,
+      attackPhase === "active" ? 6 : attackPhase === "snap" ? 4 : 2
+    );
 
-    if (snapWindow) {
+    if (attackPhase === "snap") {
       const pulse = 1 + Math.sin(time / 26) * 0.07;
-      this.drawDangerOutline(move.range * pulse, move.arcDegrees, 0xfff0b3, 0.7, 2);
+      this.drawDangerOutline(move.range * pulse, move.arcDegrees, 0xffffff, 0.72, 2);
     }
 
     if (this.debugHitboxes) {
@@ -438,16 +455,27 @@ export class BossDuelScene extends Phaser.Scene {
       this.effects.lineBetween(
         this.player.position.x,
         this.player.position.y,
-        this.player.position.x + this.player.facing.x * (heavy ? 94 : 74),
-        this.player.position.y + this.player.facing.y * (heavy ? 94 : 74)
+        this.player.position.x + this.player.facing.x * (heavy ? 94 : 86),
+        this.player.position.y + this.player.facing.y * (heavy ? 94 : 86)
       );
     }
 
     this.drawImpactFx(time);
 
     const phaseTwo = this.boss.vitals.hp <= this.boss.vitals.maxHp * 0.5;
-    this.actors.fillStyle(phaseTwo ? 0x6d2631 : 0x443d39, 1);
+    const bossAttackPhase = getBossAttackPhase(this.bossAttack, time);
+    const bossHitFlash = this.hasRecentBossHitFx(time);
+    const bossColor = bossHitFlash ? 0xf5d889 : bossAttackPhase === "recovery" ? 0x2c312d : phaseTwo ? 0x6d2631 : 0x443d39;
+    this.actors.fillStyle(bossColor, 1);
     this.actors.fillCircle(this.boss.position.x, this.boss.position.y, 35);
+    if (bossAttackPhase === "recovery") {
+      this.actors.lineStyle(3, 0x9fab8e, 0.62);
+      this.actors.strokeCircle(this.boss.position.x, this.boss.position.y, 41);
+    }
+    if (bossHitFlash) {
+      this.actors.lineStyle(4, 0xf5d889, 0.84);
+      this.actors.strokeCircle(this.boss.position.x, this.boss.position.y, 42);
+    }
     this.actors.fillStyle(0xd8b25e, 0.95);
     this.actors.fillCircle(
       this.boss.position.x + this.boss.facing.x * 17,
@@ -521,6 +549,15 @@ export class BossDuelScene extends Phaser.Scene {
     }
   }
 
+  private hasRecentBossHitFx(time: number) {
+    return this.impactFx.some(
+      (effect) =>
+        (effect.label === "player-hit" || effect.label === "posture-break") &&
+        time - effect.startedAt >= 0 &&
+        time - effect.startedAt <= Math.min(160, effect.durationMs)
+    );
+  }
+
   private publishSnapshot(time: number) {
     window.dispatchEvent(
       new CustomEvent<CombatSnapshot>("boss-duel:snapshot", {
@@ -535,6 +572,8 @@ export class BossDuelScene extends Phaser.Scene {
       status: this.status,
       elapsedMs: Math.max(0, time - this.runStartedAt),
       releaseSha: RELEASE_SHA,
+      bossAttackPhase: getBossAttackPhase(this.bossAttack, time),
+      playerActionState: this.getPlayerActionState(time),
       player: {
         hp: this.player.vitals.hp,
         maxHp: this.player.vitals.maxHp,
@@ -593,6 +632,19 @@ export class BossDuelScene extends Phaser.Scene {
     };
     if (move.x === 0 && move.y === 0) return this.player.facing;
     return normalize(move);
+  }
+
+  private getPlayerActionState(time: number): PlayerActionState {
+    if (this.status !== "running") return "idle";
+    if (time < this.dodgeEndsAt) return "dodging";
+    if (this.playerAttack) {
+      if (time <= this.playerAttack.endsAt) return this.playerAttack.kind;
+      if (time < this.playerAttack.recoveryEndsAt) return "recovering";
+    }
+    if (this.keys.W.isDown || this.keys.A.isDown || this.keys.S.isDown || this.keys.D.isDown) {
+      return "moving";
+    }
+    return "idle";
   }
 
   private scalePointer(pointer: Phaser.Input.Pointer): Vec2 {

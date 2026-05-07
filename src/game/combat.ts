@@ -1,4 +1,4 @@
-import type { ActorVitals, BossMoveId, Vec2 } from "./types";
+import type { ActorVitals, BossAttackPhase, BossMoveId, Vec2 } from "./types";
 
 export const ARENA = {
   width: 1200,
@@ -14,6 +14,25 @@ export const PLAYER_MAX: ActorVitals = {
   posture: 0,
   maxPosture: 100
 };
+
+export const BOSS_SNAP_WINDOW_MS = 150;
+
+export const PLAYER_ATTACKS = {
+  light: {
+    range: 98,
+    arcDegrees: 126,
+    damage: 16,
+    posture: 24,
+    staminaCost: 18
+  },
+  heavy: {
+    range: 108,
+    arcDegrees: 86,
+    damage: 34,
+    posture: 46,
+    staminaCost: 34
+  }
+} as const;
 
 export const BOSS_MAX: ActorVitals = {
   hp: 260,
@@ -100,6 +119,25 @@ export function isInsideArc(origin: Vec2, facing: Vec2, target: Vec2, range: num
   const targetNorm = normalize(toTarget);
   const halfRadians = (arcDegrees * Math.PI) / 360;
   return dot(facingNorm, targetNorm) >= Math.cos(halfRadians);
+}
+
+export function getBossAttackPhase(
+  timing:
+    | {
+        startedAt: number;
+        activeAt: number;
+        endsAt: number;
+        recoveryEndsAt: number;
+      }
+    | null
+    | undefined,
+  time: number
+): BossAttackPhase {
+  if (!timing || time < timing.startedAt || time > timing.recoveryEndsAt) return "idle";
+  if (time < timing.activeAt - BOSS_SNAP_WINDOW_MS) return "windup";
+  if (time < timing.activeAt) return "snap";
+  if (time <= timing.endsAt) return "active";
+  return "recovery";
 }
 
 export function spendStamina(vitals: ActorVitals, cost: number) {

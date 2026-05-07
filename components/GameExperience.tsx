@@ -8,6 +8,8 @@ const emptySnapshot: CombatSnapshot = {
   status: "loading",
   elapsedMs: 0,
   releaseSha: "local",
+  bossAttackPhase: "idle",
+  playerActionState: "idle",
   player: {
     hp: 100,
     maxHp: 100,
@@ -50,6 +52,8 @@ function toTrajectorySample(snapshot: CombatSnapshot): CombatTrajectorySample {
     runId: snapshot.runId,
     t: Math.round(snapshot.elapsedMs),
     status: snapshot.status,
+    bossAttackPhase: snapshot.bossAttackPhase,
+    playerActionState: snapshot.playerActionState,
     playerHp: Math.round(snapshot.player.hp),
     stamina: Math.round(snapshot.player.stamina),
     bossHp: Math.round(snapshot.boss.hp),
@@ -73,6 +77,8 @@ function shouldKeepTrajectorySample(previous: CombatTrajectorySample | undefined
     next.t - previous.t >= 250 ||
     previous.status !== next.status ||
     previous.bossMove !== next.bossMove ||
+    previous.bossAttackPhase !== next.bossAttackPhase ||
+    previous.playerActionState !== next.playerActionState ||
     previous.playerHp !== next.playerHp ||
     previous.bossHp !== next.bossHp ||
     previous.dodges !== next.dodges ||

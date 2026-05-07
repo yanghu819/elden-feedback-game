@@ -2,6 +2,10 @@ export type GameStatus = "loading" | "running" | "dead" | "victory" | "paused";
 
 export type BossMoveId = "watching" | "delayed-lunge" | "grave-sweep" | "ash-slam" | "broken";
 
+export type BossAttackPhase = "idle" | "windup" | "snap" | "active" | "recovery";
+
+export type PlayerActionState = "idle" | "moving" | "dodging" | "light" | "heavy" | "recovering";
+
 export type Vec2 = {
   x: number;
   y: number;
@@ -21,6 +25,8 @@ export type CombatSnapshot = {
   status: GameStatus;
   elapsedMs: number;
   releaseSha: string;
+  bossAttackPhase: BossAttackPhase;
+  playerActionState: PlayerActionState;
   player: ActorVitals;
   boss: ActorVitals & {
     phase: 1 | 2;
@@ -53,6 +59,8 @@ export type CombatTrajectorySample = {
   bossPosture: number;
   bossPhase: 1 | 2;
   bossMove: BossMoveId;
+  bossAttackPhase: BossAttackPhase;
+  playerActionState: PlayerActionState;
   dodges: number;
   light: number;
   heavy: number;

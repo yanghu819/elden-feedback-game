@@ -32,21 +32,25 @@ function summarizeTrajectory(payload: FeedbackPayload) {
     const previous = trajectory[index - 1];
     const current = trajectory[index];
     if (current.damageTaken > previous.damageTaken) {
-      damageEvents.push(`- ${current.t}ms: +${current.damageTaken - previous.damageTaken} damage during ${current.bossMove}, player HP ${current.playerHp}`);
+      damageEvents.push(
+        `- ${current.t}ms: +${current.damageTaken - previous.damageTaken} damage during ${current.bossMove}/${current.bossAttackPhase}, player HP ${current.playerHp}`
+      );
     }
     if (current.hits > previous.hits) {
       hitEvents.push(`- ${current.t}ms: hit landed, boss HP ${current.bossHp}, posture ${current.bossPosture}`);
     }
     if (current.dodges > previous.dodges) {
-      dodgeEvents.push(`- ${current.t}ms: dodge during ${current.bossMove}, stamina ${current.stamina}`);
+      dodgeEvents.push(`- ${current.t}ms: dodge during ${current.bossMove}/${current.bossAttackPhase}, stamina ${current.stamina}`);
     }
     if (current.light > previous.light || current.heavy > previous.heavy) {
-      attackEvents.push(`- ${current.t}ms: attacks light=${current.light}, heavy=${current.heavy}, stamina ${current.stamina}, boss move ${current.bossMove}`);
+      attackEvents.push(
+        `- ${current.t}ms: attacks light=${current.light}, heavy=${current.heavy}, player state ${current.playerActionState}, stamina ${current.stamina}, boss ${current.bossMove}/${current.bossAttackPhase}`
+      );
     }
   }
 
   const lastRows = trajectory.slice(-14).map((sample) =>
-    `| ${sample.t} | ${sample.status} | ${sample.playerHp} | ${sample.stamina} | ${sample.bossHp} | ${sample.bossMove} | ${sample.dodges} | ${sample.hits} | ${sample.damageTaken} |`
+    `| ${sample.t} | ${sample.status} | ${sample.playerHp} | ${sample.stamina} | ${sample.bossHp} | ${sample.bossMove} | ${sample.bossAttackPhase} | ${sample.playerActionState} | ${sample.dodges} | ${sample.hits} | ${sample.damageTaken} |`
   );
 
   return [
@@ -65,9 +69,9 @@ function summarizeTrajectory(payload: FeedbackPayload) {
     "Attack events:",
     attackEvents.length ? attackEvents.join("\n") : "- None",
     "",
-    "| t(ms) | status | player HP | stamina | boss HP | boss move | dodges | hits | damage |",
-    "| --- | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: |",
-    ...(lastRows.length ? lastRows : ["| n/a | n/a | 0 | 0 | 0 | n/a | 0 | 0 | 0 |"])
+    "| t(ms) | status | player HP | stamina | boss HP | boss move | boss phase | player state | dodges | hits | damage |",
+    "| --- | --- | ---: | ---: | ---: | --- | --- | --- | ---: | ---: | ---: |",
+    ...(lastRows.length ? lastRows : ["| n/a | n/a | 0 | 0 | 0 | n/a | idle | idle | 0 | 0 | 0 |"])
   ].join("\n");
 }
 
@@ -83,6 +87,8 @@ function buildIssueBody(payload: FeedbackPayload) {
     `- release_sha: ${context.releaseSha}`,
     `- status: ${context.status}`,
     `- elapsed_ms: ${Math.round(context.elapsedMs)}`,
+    `- boss_attack_phase: ${context.bossAttackPhase}`,
+    `- player_action_state: ${context.playerActionState}`,
     `- boss_phase: ${context.boss.phase}`,
     `- boss_move_at_feedback: ${context.boss.move}`,
     `- player_hp: ${Math.round(context.player.hp)} / ${context.player.maxHp}`,
