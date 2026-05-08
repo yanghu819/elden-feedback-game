@@ -13,12 +13,12 @@ Open `http://localhost:3000`.
 
 ## Controls
 
-- `WASD`: move
-- Mouse: aim
-- Left click or `J`: light attack
-- Right click or `K`: heavy attack
-- `E`: gap cut
-- `Space` or `Shift`: dodge
+- `WASD` or arrow keys: lock-on movement
+- `J`: A button, light chain
+- `K`: B button, roll / dodge
+- `U`: C button, heavy attack
+- `I`: D button, gap cut
+- Mouse / `Space` / `Shift` / `E`: legacy aliases
 - `R`: restart after death or victory
 - `F`: feedback
 - `H`: debug hitboxes

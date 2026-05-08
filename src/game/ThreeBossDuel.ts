@@ -327,7 +327,25 @@ export class ThreeBossDuel {
       this.keysPressed.add(event.code);
     }
     this.keysDown.add(event.code);
-    if (["Space", "ShiftLeft", "ShiftRight", "KeyW", "KeyA", "KeyS", "KeyD"].includes(event.code)) {
+    if (
+      [
+        "Space",
+        "ShiftLeft",
+        "ShiftRight",
+        "ArrowUp",
+        "ArrowDown",
+        "ArrowLeft",
+        "ArrowRight",
+        "KeyW",
+        "KeyA",
+        "KeyS",
+        "KeyD",
+        "KeyJ",
+        "KeyK",
+        "KeyU",
+        "KeyI"
+      ].includes(event.code)
+    ) {
       event.preventDefault();
     }
   };
@@ -705,7 +723,7 @@ export class ThreeBossDuel {
       }
     }
 
-    if (!attacking && (this.keysPressed.has("Space") || this.keysPressed.has("ShiftLeft") || this.keysPressed.has("ShiftRight"))) {
+    if (!attacking && this.wasPressed("KeyK", "Space", "ShiftLeft", "ShiftRight")) {
       if (spendStamina(this.player.vitals, 28)) {
         this.stats.dodgeCount += 1;
         this.dodgeEndsAt = time + 230;
@@ -1170,19 +1188,31 @@ export class ThreeBossDuel {
   private getMoveDirection() {
     const forward = directionTo(this.player.position, this.boss.position);
     const right = normalize({ x: forward.y, y: -forward.x });
+    const forwardHeld = this.isDown("KeyW", "ArrowUp");
+    const backHeld = this.isDown("KeyS", "ArrowDown");
+    const rightHeld = this.isDown("KeyD", "ArrowRight");
+    const leftHeld = this.isDown("KeyA", "ArrowLeft");
     const move = {
       x:
-        Number(this.keysDown.has("KeyW")) * forward.x -
-        Number(this.keysDown.has("KeyS")) * forward.x +
-        Number(this.keysDown.has("KeyD")) * right.x -
-        Number(this.keysDown.has("KeyA")) * right.x,
+        Number(forwardHeld) * forward.x -
+        Number(backHeld) * forward.x +
+        Number(rightHeld) * right.x -
+        Number(leftHeld) * right.x,
       y:
-        Number(this.keysDown.has("KeyW")) * forward.y -
-        Number(this.keysDown.has("KeyS")) * forward.y +
-        Number(this.keysDown.has("KeyD")) * right.y -
-        Number(this.keysDown.has("KeyA")) * right.y
+        Number(forwardHeld) * forward.y -
+        Number(backHeld) * forward.y +
+        Number(rightHeld) * right.y -
+        Number(leftHeld) * right.y
     };
     return normalize(move);
+  }
+
+  private isDown(...codes: string[]) {
+    return codes.some((code) => this.keysDown.has(code));
+  }
+
+  private wasPressed(...codes: string[]) {
+    return codes.some((code) => this.keysPressed.has(code));
   }
 
   private keepActorsSeparated() {
@@ -1203,9 +1233,9 @@ export class ThreeBossDuel {
   }
 
   private readAttackInput(): PlayerAttackKind | null {
-    if (this.keysPressed.has("KeyE")) return "skill";
-    if (this.keysPressed.has("KeyK") || this.mousePressed.has(2)) return "heavy";
-    if (this.keysPressed.has("KeyJ") || this.mousePressed.has(0)) return "light";
+    if (this.wasPressed("KeyI", "KeyE")) return "skill";
+    if (this.wasPressed("KeyU") || this.mousePressed.has(2)) return "heavy";
+    if (this.wasPressed("KeyJ") || this.mousePressed.has(0)) return "light";
     return null;
   }
 
@@ -1216,7 +1246,7 @@ export class ThreeBossDuel {
       if (time <= this.playerAttack.endsAt) return this.playerAttack.kind;
       if (time < this.playerAttack.recoveryEndsAt) return "recovering";
     }
-    const moving = this.keysDown.has("KeyW") || this.keysDown.has("KeyA") || this.keysDown.has("KeyS") || this.keysDown.has("KeyD");
+    const moving = this.isDown("KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight");
     return moving ? "moving" : "idle";
   }
 

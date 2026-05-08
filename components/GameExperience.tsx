@@ -102,13 +102,13 @@ export default function GameExperience() {
   }, [snapshot.status]);
 
   const coachText = useMemo(() => {
-    if (snapshot.status === "dead") return "R retry. Watch for the gold flash before the hit lands.";
-    if (snapshot.status === "victory") return "R rematch. Break posture faster with dodge counters and the third light hit.";
-    if (snapshot.metrics.counterReady) return "Counter ready: hit now for posture damage.";
-    if (snapshot.bossAttackPhase === "active" || snapshot.bossAttackPhase === "snap") return "Gold danger: dodge through it, then punish.";
-    if (snapshot.bossAttackPhase === "recovery") return "Boss is recovering: attack the opening.";
-    if (snapshot.metrics.maxLightChain < 3) return "W/S in-out, A/D orbit. Chain light attacks to the third hit.";
-    return "Keep orbiting, dodge gold danger, break posture.";
+    if (snapshot.status === "dead") return "R retry. Watch gold flash, tap K to roll through it.";
+    if (snapshot.status === "victory") return "R rematch. Use J chains, K roll counters, U posture hits.";
+    if (snapshot.metrics.counterReady) return "Counter ready: press J or U now.";
+    if (snapshot.bossAttackPhase === "active" || snapshot.bossAttackPhase === "snap") return "Gold danger: K roll through it, then punish.";
+    if (snapshot.bossAttackPhase === "recovery") return "Boss is open: J chain or U heavy.";
+    if (snapshot.metrics.maxLightChain < 3) return "KOF layout: J light, K roll, U heavy, I gap cut.";
+    return "Orbit with directions, K roll danger, break posture.";
   }, [snapshot]);
 
   async function submitFeedback() {
@@ -193,12 +193,11 @@ export default function GameExperience() {
 
         <div className="bottom-row">
           <div className="hint-row">
-            <span className="key">W/S in-out</span>
-            <span className="key">A/D orbit</span>
-            <span className="key">LMB/J 3-hit</span>
-            <span className="key">RMB/K heavy</span>
-            <span className="key">E gap cut</span>
-            <span className="key">Space dodge</span>
+            <span className="key">WASD / Arrows</span>
+            <span className="key">A: J light</span>
+            <span className="key">B: K roll</span>
+            <span className="key">C: U heavy</span>
+            <span className="key">D: I gap cut</span>
           </div>
           <button className="feedback-button" type="button" onClick={() => setFeedbackOpen(true)}>
             Feedback
