@@ -216,8 +216,6 @@ export class ThreeBossDuel {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private camera: THREE.PerspectiveCamera;
-  private raycaster = new THREE.Raycaster();
-  private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private animationFrame = 0;
   private lastFrameTime = 0;
   private runStartedAt = 0;
@@ -250,8 +248,6 @@ export class ThreeBossDuel {
   private keysDown = new Set<string>();
   private keysPressed = new Set<string>();
   private mousePressed = new Set<number>();
-  private pointerNdc = new THREE.Vector2(0, 0);
-  private pointerHasMoved = false;
   private cameraTarget = new THREE.Vector3(ARENA.width / 2, 70, ARENA.height / 2);
   private cameraPosition = new THREE.Vector3(260, 250, 630);
 
@@ -300,7 +296,6 @@ export class ThreeBossDuel {
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
     window.removeEventListener("blur", this.onBlur);
-    this.renderer.domElement.removeEventListener("pointermove", this.onPointerMove);
     this.renderer.domElement.removeEventListener("pointerdown", this.onPointerDown);
     this.renderer.domElement.removeEventListener("contextmenu", this.onContextMenu);
     clearGroup(this.scene);
@@ -313,7 +308,6 @@ export class ThreeBossDuel {
     window.addEventListener("keydown", this.onKeyDown);
     window.addEventListener("keyup", this.onKeyUp);
     window.addEventListener("blur", this.onBlur);
-    this.renderer.domElement.addEventListener("pointermove", this.onPointerMove);
     this.renderer.domElement.addEventListener("pointerdown", this.onPointerDown);
     this.renderer.domElement.addEventListener("contextmenu", this.onContextMenu);
   }
@@ -346,13 +340,6 @@ export class ThreeBossDuel {
     this.keysDown.clear();
     this.keysPressed.clear();
     this.mousePressed.clear();
-  };
-
-  private onPointerMove = (event: PointerEvent) => {
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    this.pointerNdc.x = ((event.clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1;
-    this.pointerNdc.y = -(((event.clientY - rect.top) / Math.max(1, rect.height)) * 2 - 1);
-    this.pointerHasMoved = true;
   };
 
   private onPointerDown = (event: PointerEvent) => {
@@ -596,16 +583,16 @@ export class ThreeBossDuel {
       new THREE.BoxGeometry(16, 12, 150),
       new THREE.MeshStandardMaterial({ color: 0x221d19, metalness: 0.28, roughness: 0.56 })
     );
-    this.bossWeapon.position.set(-36, 56, 64);
-    this.bossWeapon.rotation.z = -0.18;
+    this.bossWeapon.position.set(-58, 70, 42);
+    this.bossWeapon.rotation.z = 0.42;
     this.bossWeapon.castShadow = true;
     this.bossGroup.add(this.bossWeapon);
     const stampHead = new THREE.Mesh(
       new THREE.BoxGeometry(48, 34, 28),
       new THREE.MeshStandardMaterial({ color: 0x8bd8d2, roughness: 0.66 })
     );
-    stampHead.position.set(-36, 52, 137);
-    stampHead.rotation.z = -0.18;
+    stampHead.position.set(-78, 70, 112);
+    stampHead.rotation.z = 0.42;
     stampHead.castShadow = true;
     this.bossGroup.add(stampHead);
     this.scene.add(this.bossGroup);
@@ -686,6 +673,7 @@ export class ThreeBossDuel {
       this.updateCounterWindow(time);
       this.resolvePlayerAttack(time);
       this.resolveBossAttack(time);
+      this.keepActorsSeparated();
       this.checkEndState(time);
     }
 
@@ -696,7 +684,7 @@ export class ThreeBossDuel {
   }
 
   private updatePlayer(time: number, dt: number) {
-    this.updateFacingFromPointer();
+    this.updateFacingFromBoss();
 
     const attacking = Boolean(this.playerAttack && time < this.playerAttack.recoveryEndsAt);
     const dodging = time < this.dodgeEndsAt;
@@ -1005,7 +993,7 @@ export class ThreeBossDuel {
     const bossBaseScale = attackPhase === "snap" ? 1.03 + Math.sin(time / 24) * 0.02 : 1;
     const bossWobble = Math.sin(time / 105) * 0.035;
     this.bossGroup.scale.set(bossBaseScale * (1 + bossWobble), bossBaseScale * (1 - bossWobble * 0.35), bossBaseScale * (1 - bossWobble));
-    this.bossWeapon.rotation.x = attackPhase === "snap" ? -0.32 : attackPhase === "active" ? -0.58 : recovery ? 0.18 : -0.04;
+    this.bossWeapon.rotation.x = attackPhase === "snap" ? -0.2 : attackPhase === "active" ? -0.46 : recovery ? 0.24 : 0.02;
     this.bossWeapon.rotation.y = Math.sin(time / 130) * 0.08;
   }
 
@@ -1175,22 +1163,12 @@ export class ThreeBossDuel {
     }
   }
 
-  private updateFacingFromPointer() {
-    if (!this.pointerHasMoved) {
-      this.player.facing = directionTo(this.player.position, this.boss.position);
-      return;
-    }
-    this.raycaster.setFromCamera(this.pointerNdc, this.camera);
-    const point = new THREE.Vector3();
-    if (this.raycaster.ray.intersectPlane(this.groundPlane, point)) {
-      this.player.facing = directionTo(this.player.position, { x: point.x, y: point.z });
-    }
+  private updateFacingFromBoss() {
+    this.player.facing = directionTo(this.player.position, this.boss.position);
   }
 
   private getMoveDirection() {
-    const forward3 = new THREE.Vector3();
-    this.camera.getWorldDirection(forward3);
-    const forward = normalize({ x: forward3.x, y: forward3.z });
+    const forward = directionTo(this.player.position, this.boss.position);
     const right = normalize({ x: forward.y, y: -forward.x });
     const move = {
       x:
@@ -1205,6 +1183,23 @@ export class ThreeBossDuel {
         Number(this.keysDown.has("KeyA")) * right.y
     };
     return normalize(move);
+  }
+
+  private keepActorsSeparated() {
+    const minDistance = 112;
+    const between = {
+      x: this.player.position.x - this.boss.position.x,
+      y: this.player.position.y - this.boss.position.y
+    };
+    const current = Math.hypot(between.x, between.y);
+    if (current >= minDistance) return;
+
+    const direction = current < 0.0001 ? { x: -this.boss.facing.x, y: -this.boss.facing.y } : { x: between.x / current, y: between.y / current };
+    const push = minDistance - current;
+    this.player.position = clampToArena({
+      x: this.player.position.x + direction.x * push,
+      y: this.player.position.y + direction.y * push
+    });
   }
 
   private readAttackInput(): PlayerAttackKind | null {

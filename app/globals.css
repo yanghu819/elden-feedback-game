@@ -133,8 +133,6 @@ button {
 }
 
 .status-line {
-  align-self: center;
-  justify-self: center;
   min-height: 48px;
   padding: 12px 16px;
   border: 1px solid rgba(241, 239, 230, 0.18);
@@ -144,6 +142,28 @@ button {
   font-weight: 800;
   text-align: center;
   text-transform: uppercase;
+}
+
+.center-stack {
+  align-self: center;
+  justify-self: center;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.coach-line {
+  max-width: min(520px, calc(100vw - 32px));
+  min-height: 34px;
+  padding: 8px 12px;
+  border: 1px solid rgba(139, 216, 210, 0.2);
+  border-radius: 6px;
+  background: rgba(12, 15, 14, 0.68);
+  color: #f1efe6;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
 }
 
 .status-line span {
@@ -323,6 +343,13 @@ button {
   }
 
   .hint-row {
-    max-width: 72vw;
+    max-width: 62vw;
+    font-size: 10px;
+    margin-bottom: 44px;
+  }
+
+  .coach-line {
+    max-width: calc(100vw - 24px);
+    font-size: 12px;
   }
 }

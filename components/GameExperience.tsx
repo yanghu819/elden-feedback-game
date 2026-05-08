@@ -101,6 +101,16 @@ export default function GameExperience() {
     return "";
   }, [snapshot.status]);
 
+  const coachText = useMemo(() => {
+    if (snapshot.status === "dead") return "R retry. Watch for the gold flash before the hit lands.";
+    if (snapshot.status === "victory") return "R rematch. Break posture faster with dodge counters and the third light hit.";
+    if (snapshot.metrics.counterReady) return "Counter ready: hit now for posture damage.";
+    if (snapshot.bossAttackPhase === "active" || snapshot.bossAttackPhase === "snap") return "Gold danger: dodge through it, then punish.";
+    if (snapshot.bossAttackPhase === "recovery") return "Boss is recovering: attack the opening.";
+    if (snapshot.metrics.maxLightChain < 3) return "W/S in-out, A/D orbit. Chain light attacks to the third hit.";
+    return "Keep orbiting, dodge gold danger, break posture.";
+  }, [snapshot]);
+
   async function submitFeedback() {
     const trimmed = message.trim();
     if (!trimmed) return;
@@ -168,19 +178,24 @@ export default function GameExperience() {
         </div>
 
         {statusText ? (
-          <div className="status-line">
-            {statusText}
-            <span>{snapshot.status === "dead" ? "Press R to retry" : "Press R to fight again"}</span>
+          <div className="center-stack">
+            <div className="status-line">
+              {statusText}
+              <span>{snapshot.status === "dead" ? "Press R to retry" : "Press R to fight again"}</span>
+            </div>
+            <div className="coach-line">{coachText}</div>
           </div>
         ) : (
-          <div />
+          <div className="center-stack">
+            <div className="coach-line">{coachText}</div>
+          </div>
         )}
 
         <div className="bottom-row">
           <div className="hint-row">
-            <span className="key">WASD move</span>
-            <span className="key">Mouse aim</span>
-            <span className="key">LMB/J light</span>
+            <span className="key">W/S in-out</span>
+            <span className="key">A/D orbit</span>
+            <span className="key">LMB/J 3-hit</span>
             <span className="key">RMB/K heavy</span>
             <span className="key">E gap cut</span>
             <span className="key">Space dodge</span>

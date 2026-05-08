@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PORT="${E2E_PORT:-3010}"
+PORT="${E2E_PORT:-3000}"
 BASE_URL="http://localhost:${PORT}"
 LOG_FILE="${TMPDIR:-/tmp}/elden-feedback-game-e2e.log"
+
+if lsof -iTCP:"${PORT}" -sTCP:LISTEN -n -P >/dev/null 2>&1; then
+  E2E_BASE_URL="${BASE_URL}" npx playwright test
+  exit $?
+fi
 
 rm -f "${LOG_FILE}"
 npm run dev -- -p "${PORT}" >"${LOG_FILE}" 2>&1 &
