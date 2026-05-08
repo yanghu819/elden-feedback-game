@@ -182,7 +182,7 @@ export default function GameExperience() {
             <span className="key">Mouse aim</span>
             <span className="key">LMB/J light</span>
             <span className="key">RMB/K heavy</span>
-            <span className="key">E cut</span>
+            <span className="key">E gap cut</span>
             <span className="key">Space dodge</span>
           </div>
           <button className="feedback-button" type="button" onClick={() => setFeedbackOpen(true)}>

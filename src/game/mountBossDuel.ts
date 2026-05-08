@@ -1,29 +1,13 @@
-import Phaser from "phaser";
-import { BossDuelScene } from "./BossDuelScene";
+import { ThreeBossDuel } from "./ThreeBossDuel";
 
 export function mountBossDuel(parent: string) {
-  const game = new Phaser.Game({
-    type: Phaser.AUTO,
-    parent,
-    width: 1200,
-    height: 720,
-    backgroundColor: "#111312",
-    scale: {
-      mode: Phaser.Scale.FIT,
-      autoCenter: Phaser.Scale.CENTER_BOTH
-    },
-    physics: {
-      default: "arcade"
-    },
-    scene: [BossDuelScene],
-    input: {
-      mouse: {
-        preventDefaultWheel: true
-      }
-    }
-  });
+  const element = document.getElementById(parent);
+  if (!element) {
+    throw new Error(`Missing game mount element: ${parent}`);
+  }
+  const game = new ThreeBossDuel(element);
 
   return () => {
-    game.destroy(true);
+    game.destroy();
   };
 }

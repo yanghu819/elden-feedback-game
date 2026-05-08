@@ -17,7 +17,8 @@
 
 ## Code Rules
 - Keep combat math deterministic and testable in `src/game/combat.ts`.
-- Keep Phaser rendering/input code separate from combat helpers.
+- Keep Three.js rendering/input code separate from combat helpers.
+- Keep the 3D style abstract, humorous, and original; do not chase realistic asset production.
 - Add or update focused regression tests for bug fixes and tuning changes.
 - Do not change API shapes unless the issue explicitly allows it.
 - Avoid unrelated UI, formatting, dependency, or asset churn.
