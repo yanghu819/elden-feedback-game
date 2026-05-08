@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "playwright test"
+    "e2e": "bash scripts/e2e.sh"
   },
   "dependencies": {
     "next": "16.2.5",
@@ -19,6 +19,8 @@
     "three": "^0.184.0"
   },
   "devDependencies": {
+    "@emnapi/core": "^1.10.0",
+    "@emnapi/runtime": "^1.10.0",
     "@playwright/test": "1.59.1",
     "@types/node": "24.10.1",
     "@types/react": "19.2.7",

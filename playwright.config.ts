@@ -9,14 +9,8 @@ export default defineConfig({
   fullyParallel: true,
   reporter: "html",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: process.env.E2E_BASE_URL || "http://localhost:3010",
     trace: "on-first-retry"
-  },
-  webServer: {
-    command: "npm run dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000
   },
   projects: [
     {
